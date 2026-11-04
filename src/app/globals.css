@@ -123,3 +123,23 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--pink-deep);
 }
+
+/* Respect the OS "reduce motion" setting everywhere (Tailwind spin/pulse, transitions,
+   React Flow's animated edges, hover lifts). Mascot keyframes are handled in mascot.css. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .react-flow__edge.animated path {
+    animation: none !important;
+    stroke-dasharray: none;
+  }
+}

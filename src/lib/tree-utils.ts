@@ -42,7 +42,7 @@ export function findBranchLeaf(nodes: Nodes, startId: string | null): string | n
     const kids = childrenOf(nodes, currId).filter((c) => !visited.has(c.id));
     const next =
       curr.kind === 'main'
-        ? kids.find((c) => c.kind === 'main')
+        ? [...kids].reverse().find((c) => c.kind === 'main')
         : [...kids].reverse().find((c) => c.kind === 'side' && !c.branchRoot);
     if (!next) break;
     currId = next.id;
@@ -94,7 +94,26 @@ export function getSideThread(nodes: Nodes, rootId: string | null): TurnNode[] {
   return out;
 }
 
-/** Side-branch roots hanging directly off a node. */
+/** Id of the first version of a turn (edited siblings point back at it). */
+export function versionOrigin(n: TurnNode): string {
+  return n.versionOf ?? n.id;
+}
+
+/** All versions of a turn (the turn plus its edited siblings), oldest first. */
+export function getVersions(nodes: Nodes, id: string): TurnNode[] {
+  const n = nodes[id];
+  if (!n) return [];
+  const origin = versionOrigin(n);
+  return Object.values(nodes)
+    .filter((x) => x.parentId === n.parentId && versionOrigin(x) === origin)
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** Side-branch roots hanging directly off a node (newest version of each). */
 export function sideRootsOf(nodes: Nodes, parentId: string): TurnNode[] {
-  return childrenOf(nodes, parentId).filter((c) => isSideRoot(nodes, c));
+  const newestByOrigin = new Map<string, TurnNode>();
+  for (const c of childrenOf(nodes, parentId)) {
+    if (isSideRoot(nodes, c)) newestByOrigin.set(versionOrigin(c), c); // sorted oldest-first
+  }
+  return [...newestByOrigin.values()].sort((a, b) => a.createdAt - b.createdAt);
 }

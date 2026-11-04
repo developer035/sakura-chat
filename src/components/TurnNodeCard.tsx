@@ -2,7 +2,8 @@
 
 import React, { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { AlertCircle, Check, GitFork, Loader2, Pin } from 'lucide-react';
+import { AlertCircle, Check, GitFork, Loader2, Pin, Trash2 } from 'lucide-react';
+import { deleteTurn } from '@/lib/chat-actions';
 import { useStore } from '@/lib/store';
 import type { TurnFlowNode } from '@/lib/graph-layout';
 
@@ -57,7 +58,20 @@ function TurnNodeCardInner({ data }: NodeProps<TurnFlowNode>) {
       </p>
 
       <div className="flex items-center justify-between">
-        {data.hasPin ? <Pin className="w-3 h-3 text-[var(--ink)]" /> : <span />}
+        <div className="flex items-center gap-1.5">
+          {data.hasPin ? <Pin className="w-3 h-3 text-[var(--ink)]" /> : null}
+          <button
+            type="button"
+            className="nodrag nopan p-0.5 rounded-full text-[var(--ink-light)] hover:text-red-600 hover:bg-red-50 opacity-50 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteTurn(data.id);
+            }}
+            title="Delete this turn and everything below it"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
         <button
           type="button"
           className="nodrag nopan inline-flex items-center gap-1 text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full border border-[var(--ink)] bg-[var(--cream)] hover:bg-[var(--lavender)] text-[var(--ink)] opacity-70 group-hover:opacity-100 transition-opacity"

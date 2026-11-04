@@ -1,5 +1,6 @@
 import { callMeta } from '@/lib/meta-server';
 import { ROUTER_SYSTEM_PROMPT } from '@/lib/prompts';
+import { rateLimit } from '@/lib/rate-limit';
 
 const DECISIONS = ['continue', 'tangent', 'new_topic'] as const;
 type Decision = (typeof DECISIONS)[number];
@@ -7,6 +8,7 @@ type Decision = (typeof DECISIONS)[number];
 const FALLBACK = { decision: 'continue' as Decision, title: '', reason: '' };
 
 export async function POST(req: Request) {
+  if (!rateLimit(req, 'route', 40, 60_000).ok) return Response.json(FALLBACK);
   try {
     const body = await req.json();
     const branchSummary = String(body?.branchSummary ?? '').slice(0, 4000);

@@ -5,7 +5,10 @@ export const META_RESPONSES_URL = 'https://api.meta.ai/v1/responses';
 export const SYSTEM_PROMPT_RESERVE = 500;
 export const DEFAULT_CONTEXT_BUDGET = 30000;
 export const STREAM_TIMEOUT_MS = 30000;
-export const MAX_MESSAGE_TOKENS = 2048;
+// Muse Spark counts hidden reasoning tokens against max_tokens, so leave generous headroom.
+export const MAX_MESSAGE_TOKENS = 6000;
+// Benchmarked (minimal vs low vs default): minimal starts streaming in ~1.7s vs 5-17s.
+export const CHAT_REASONING_EFFORT = 'minimal';
 
 export const MASCOTS = {
   mochi: {

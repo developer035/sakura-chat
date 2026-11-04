@@ -3,8 +3,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/lib/store';
 import { MASCOTS } from '@/lib/constants';
-import { getMainThread, sideRootsOf } from '@/lib/tree-utils';
-import { cancelTurn, isBusy, retryTurn, sendMainTurn } from '@/lib/chat-actions';
+import { getMainThread, getVersions, sideRootsOf } from '@/lib/tree-utils';
+import { cancelTurn, deleteTurn, editTurn, isBusy, retryTurn, sendMainTurn } from '@/lib/chat-actions';
+import { scrollBehavior } from '@/lib/motion';
 import { MascotWidget } from './MascotWidget';
 import { Breadcrumbs } from './Breadcrumbs';
 import { ChatInput } from './ChatInput';
@@ -42,14 +43,14 @@ export function ChatPanel() {
     const el = document.getElementById(`turn-${nodeId}`);
     if (!el) return;
     setFocusedNodeId(nodeId);
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
     setTimeout(() => {
       setFocusedNodeId((curr) => (curr === nodeId ? null : curr));
     }, 2500);
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
     setShowScrollBottom(false);
   }, []);
 
@@ -67,12 +68,25 @@ export function ChatPanel() {
 
   // Auto-scroll while streaming.
   useEffect(() => {
-    if (isStreaming) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isStreaming) messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
   }, [activeNode?.assistant, isStreaming]);
 
   const handleSendMessage = (text: string) => {
     sendMainTurn(text);
     requestAnimationFrame(scrollToBottom);
+  };
+
+  const versionsFor = (id: string) => {
+    const list = getVersions(nodes, id);
+    if (list.length < 2) return undefined;
+    const index = list.findIndex((v) => v.id === id);
+    const go = (target: number) => {
+      const v = list[target];
+      if (!v) return;
+      setActive(v.id);
+      requestFocus(v.id);
+    };
+    return { index, total: list.length, onPrev: () => go(index - 1), onNext: () => go(index + 1) };
   };
 
   const openSide = (rootId: string) => {
@@ -111,6 +125,10 @@ export function ChatPanel() {
               isFocused={focusedNodeId === node.id}
               onRetry={() => retryTurn(node.id)}
               onBranch={() => openWindow({ anchorId: node.id })}
+              onEdit={(text) => editTurn(node.id, text)}
+              canEdit={!isStreaming}
+              onDelete={() => deleteTurn(node.id)}
+              versions={versionsFor(node.id)}
               sideBranches={sideRootsOf(nodes, node.id).map((r) => ({ id: r.id, title: r.title }))}
               onOpenSide={openSide}
             />

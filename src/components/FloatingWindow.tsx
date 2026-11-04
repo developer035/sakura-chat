@@ -6,7 +6,8 @@ import { Minus, Pin, ScanSearch, X } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import type { TurnNode, WindowState } from '@/lib/types';
 import { getSideThread, sideRootsOf } from '@/lib/tree-utils';
-import { cancelTurn, isBusy, retryTurn, sendTurn } from '@/lib/chat-actions';
+import { cancelTurn, deleteTurn, editTurn, isBusy, retryTurn, sendTurn } from '@/lib/chat-actions';
+import { scrollBehavior } from '@/lib/motion';
 import { ChatInput } from './ChatInput';
 import { MessageTurn } from './MessageTurn';
 
@@ -122,13 +123,13 @@ function WindowContent({
   const busy = isBusy(leaf);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    endRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'end' });
   }, [leaf?.id, leaf?.assistant]);
 
   const handleSend = (text: string) => {
     if (!win.rootId) {
       const id = sendTurn({ parentId: win.anchorId, text, kind: 'side', branchRoot: true });
-      setWindowRoot(win.id, id);
+      if (id) setWindowRoot(win.id, id);
     } else if (leaf) {
       sendTurn({ parentId: leaf.id, text, kind: 'side' });
     }
@@ -199,6 +200,12 @@ function WindowContent({
               compact
               onRetry={() => retryTurn(n.id)}
               onBranch={() => openWindow({ anchorId: n.id })}
+              onEdit={(text) => {
+                const id = editTurn(n.id, text);
+                if (id && n.id === win.rootId) setWindowRoot(win.id, id);
+              }}
+              canEdit={!busy}
+              onDelete={() => deleteTurn(n.id)}
               sideBranches={sideRootsOf(nodes, n.id).map((r) => ({ id: r.id, title: r.title }))}
               onOpenSide={(rootId) => openWindow({ rootId, anchorId: n.id })}
             />

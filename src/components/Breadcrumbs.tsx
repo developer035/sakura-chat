@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store';
 import type { TurnNode } from '@/lib/types';
 import { getBranchPath } from '@/lib/tree-utils';
 import { ChevronRight } from 'lucide-react';
+import { scrollBehavior } from '@/lib/motion';
 
 interface BreadcrumbsProps {
   thread?: TurnNode[];
@@ -31,7 +32,7 @@ export function Breadcrumbs({ thread: propThread, focusedNodeId, onScrollToNode 
     } else {
       const el = document.getElementById(`turn-${nodeId}`);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
       }
     }
   };

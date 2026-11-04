@@ -4,13 +4,44 @@ import { buildContext } from './context';
 import { streamChat } from './stream';
 import { CHAT_SYSTEM_PROMPT } from './prompts';
 import { branchSummary, routeMessage, summarize } from './api';
-import { getMainThread } from './tree-utils';
+import { getMainThread, versionOrigin } from './tree-utils';
 import type { NodeKind, SearchCitation, TurnNode } from './types';
 
 /** Abort controllers for in-flight streams, keyed by node id. */
 const inflight = new Map<string, AbortController>();
 
 const get = () => useStore.getState();
+
+// ---------------------------------------------------------------------------
+// Per-session message cap (friendly client-side guard; the server rate-limits too)
+// ---------------------------------------------------------------------------
+const MAX_MESSAGES_PER_SESSION = 150;
+const COUNT_KEY = 'sakura-msg-count';
+let memoryCount = 0;
+
+/** Reserves one message slot. Returns false (and tells the user) when the cap is reached. */
+function takeMessageSlot(): boolean {
+  let count = memoryCount;
+  try {
+    count = Math.max(count, Number(sessionStorage.getItem(COUNT_KEY) ?? '0') || 0);
+  } catch {
+    /* sessionStorage unavailable: fall back to the in-memory counter */
+  }
+  if (count >= MAX_MESSAGES_PER_SESSION) {
+    get().pushToast({
+      message: `🍵 Session limit reached (${MAX_MESSAGES_PER_SESSION} messages). Open a new tab to keep chatting!`,
+    });
+    return false;
+  }
+  count += 1;
+  memoryCount = count;
+  try {
+    sessionStorage.setItem(COUNT_KEY, String(count));
+  } catch {
+    /* ignore */
+  }
+  return true;
+}
 
 function makeTitle(text: string): string {
   return text.length > 28 ? `${text.slice(0, 28)}...` : text;
@@ -69,7 +100,11 @@ function runStream(nodeId: string) {
         if (!isCurrent()) return;
         finish();
         get().updateNode(nodeId, { status: 'done' });
-        get().setMascotState('idle');
+        get().setMascotState('success');
+        // Settle back to idle, unless something else has taken over the mascot meanwhile.
+        setTimeout(() => {
+          if (get().mascotState === 'success') get().setMascotState('idle');
+        }, 1500);
         void summarizeInBackground(nodeId);
       },
       onError: (error) => {
@@ -95,13 +130,19 @@ function runStream(nodeId: string) {
   );
 }
 
-/** Creates a new turn under parentId and starts streaming the reply. Returns the new node id. */
+/**
+ * Creates a new turn under parentId and starts streaming the reply.
+ * Returns the new node id, or null when the per-session message cap is reached.
+ */
 export function sendTurn(opts: {
   parentId: string | null;
   text: string;
   kind: NodeKind;
   branchRoot?: boolean;
-}): string {
+  versionOf?: string;
+}): string | null {
+  if (!takeMessageSlot()) return null;
+
   const id = nanoid();
   const node: TurnNode = {
     id,
@@ -116,6 +157,7 @@ export function sendTurn(opts: {
     searchQueries: [],
     citations: [],
     ...(opts.branchRoot ? { branchRoot: true } : {}),
+    ...(opts.versionOf ? { versionOf: opts.versionOf } : {}),
   };
   // Side turns must not move the main panel.
   get().addNode(node, opts.kind === 'main');
@@ -128,10 +170,11 @@ export function sendTurn(opts: {
  * in parallel the router decides whether the message is a tangent (moves to a
  * side window) or an unrelated topic (starts a new tree). Both are undoable.
  */
-export function sendMainTurn(text: string): string {
+export function sendMainTurn(text: string): string | null {
   const thread = getMainThread(get().nodes, get().activeId);
   const parentId = thread.length ? thread[thread.length - 1].id : null;
   const id = sendTurn({ parentId, text, kind: 'main' });
+  if (!id) return null;
 
   // Never route the first two messages of a tree.
   if (!get().autoRoute || !parentId || thread.length < 2) return id;
@@ -166,7 +209,7 @@ export function sendMainTurn(text: string): string {
       });
     } else if (result.decision === 'new_topic') {
       st.updateNode(id, { parentId: null });
-      retryTurn(id);
+      restartTurn(id);
       st.setMascotState('branching');
       st.pushToast({
         message: '🌱 Fresh topic, so I started a new tree',
@@ -175,7 +218,7 @@ export function sendMainTurn(text: string): string {
           const s = get();
           if (!s.nodes[id]) return;
           s.updateNode(id, { parentId });
-          retryTurn(id);
+          restartTurn(id);
           s.setActive(id);
         },
       });
@@ -185,7 +228,25 @@ export function sendMainTurn(text: string): string {
   return id;
 }
 
-export function retryTurn(nodeId: string) {
+/**
+ * Edits a turn by creating a sibling version (the original and its replies are kept).
+ * Returns the new node id, or null if nothing changed / the cap was reached.
+ */
+export function editTurn(nodeId: string, text: string): string | null {
+  const n = get().nodes[nodeId];
+  const trimmed = text.trim();
+  if (!n || !trimmed || trimmed === n.user.trim()) return null;
+  return sendTurn({
+    parentId: n.parentId,
+    text: trimmed,
+    kind: n.kind,
+    branchRoot: n.branchRoot,
+    versionOf: versionOrigin(n),
+  });
+}
+
+/** Restarts a reply without counting against the message cap (internal re-runs). */
+function restartTurn(nodeId: string) {
   const node = get().nodes[nodeId];
   if (!node) return;
   get().updateNode(nodeId, {
@@ -196,6 +257,12 @@ export function retryTurn(nodeId: string) {
     citations: [],
   });
   runStream(nodeId);
+}
+
+/** User-initiated retry: counts as a message. */
+export function retryTurn(nodeId: string) {
+  if (!get().nodes[nodeId] || !takeMessageSlot()) return;
+  restartTurn(nodeId);
 }
 
 export function cancelTurn(nodeId: string) {
@@ -209,6 +276,43 @@ export function cancelTurn(nodeId: string) {
       get().setMascotState('idle');
     }
   }
+}
+
+/** Deletes a turn and everything below it, with an Undo toast that restores it exactly. */
+export function deleteTurn(id: string) {
+  const st = get();
+  if (!st.nodes[id]) return;
+
+  const doomed = new Set<string>([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const n of Object.values(st.nodes)) {
+      if (n.parentId && doomed.has(n.parentId) && !doomed.has(n.id)) {
+        doomed.add(n.id);
+        grew = true;
+      }
+    }
+  }
+
+  doomed.forEach((nodeId) => {
+    if (inflight.has(nodeId)) cancelTurn(nodeId);
+  });
+
+  const snapshot = {
+    nodes: Object.fromEntries([...doomed].map((nodeId) => [nodeId, get().nodes[nodeId]])),
+    activeId: st.activeId,
+    windows: st.windows,
+  };
+
+  get().deleteSubtree(id);
+
+  const count = doomed.size;
+  get().pushToast({
+    message: `🗑️ Deleted ${count} turn${count === 1 ? '' : 's'}`,
+    actionLabel: 'Undo',
+    onAction: () => get().restoreSnapshot(snapshot),
+  });
 }
 
 export function isBusy(node: TurnNode | null | undefined): boolean {

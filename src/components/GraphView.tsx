@@ -20,6 +20,7 @@ import {
   type GraphItem,
 } from '@/lib/graph-layout';
 import { TurnNodeCard } from './TurnNodeCard';
+import { viewportDuration } from '@/lib/motion';
 import { findSideRoot } from '@/lib/tree-utils';
 
 // Stable reference (module scope) so React Flow doesn't re-register node types.
@@ -51,7 +52,7 @@ function GraphInner() {
     const r = requestAnimationFrame(() => {
       if (!paneVisible()) return;
       if (!Number.isFinite(getZoom())) setViewport({ x: 0, y: 0, zoom: 1 });
-      fitView({ padding: 0.2, duration: 400 });
+      fitView({ padding: 0.2, duration: viewportDuration() });
     });
     return () => cancelAnimationFrame(r);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,7 +68,7 @@ function GraphInner() {
       const zoom = getZoom();
       setCenter(target.position.x + NODE_WIDTH / 2, target.position.y + NODE_HEIGHT / 2, {
         zoom: Number.isFinite(zoom) ? Math.max(zoom, 0.8) : 1,
-        duration: 400,
+        duration: viewportDuration(),
       });
     });
     return () => cancelAnimationFrame(r);

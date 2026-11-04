@@ -35,6 +35,7 @@ export interface TurnNode {
   citations?: SearchCitation[];
   webSearchEnabled?: boolean;
   branchRoot?: boolean; // first node of a branch created via "Branch"
+  versionOf?: string; // id of the first version, when this turn is an edited sibling
 }
 
 export interface WindowState {
@@ -84,6 +85,11 @@ export interface AppStore {
   addNode: (node: TurnNode, activate?: boolean) => void;
   updateNode: (id: string, patch: Partial<TurnNode>) => void;
   deleteSubtree: (id: string) => void;
+  restoreSnapshot: (snapshot: {
+    nodes: Record<string, TurnNode>;
+    activeId: string | null;
+    windows: WindowState[];
+  }) => void;
   setActive: (id: string | null) => void;
 
   // Mascot actions
@@ -101,7 +107,7 @@ export interface AppStore {
 
   // Data management & Demo
   exportJSON: () => string;
-  importJSON: (json: string) => boolean;
+  importJSON: (json: string) => { ok: boolean; count: number };
   reset: () => void;
   loadDemo: () => void;
   setDemoMode: (enabled: boolean) => void;

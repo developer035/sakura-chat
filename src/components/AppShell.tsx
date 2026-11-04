@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useSyncExternalStore } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useStore } from '@/lib/store';
 import { MASCOTS } from '@/lib/constants';
 import type { MascotName } from '@/lib/types';
@@ -11,7 +11,7 @@ import { FloatingWindowManager } from './FloatingWindowManager';
 import { ToastHost } from './Toast';
 import { ContextInspector } from './ContextInspector';
 import { MascotWidget } from './MascotWidget';
-import { Download, Upload, RotateCcw, Sparkles } from 'lucide-react';
+import { Download, Ellipsis, Upload, RotateCcw, Sparkles } from 'lucide-react';
 
 export function AppShell() {
   const hydrated = useSyncExternalStore(
@@ -20,6 +20,8 @@ export function AppShell() {
     () => false
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const demoMode = useStore((s) => s.demoMode);
   const currentMascot = useStore((s) => s.currentMascot);
@@ -32,6 +34,8 @@ export function AppShell() {
   const reset = useStore((s) => s.reset);
   const exportJSON = useStore((s) => s.exportJSON);
   const importJSON = useStore((s) => s.importJSON);
+  const pushToast = useStore((s) => s.pushToast);
+  const hasNodes = useStore((s) => Object.keys(s.nodes).length > 0);
 
   // Check URL params for ?demo=1 and hydrate store
   useEffect(() => {
@@ -42,6 +46,38 @@ export function AppShell() {
       }
     }
   }, [loadDemo]);
+
+  // Close the mobile overflow menu on outside click / Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointer = (e: PointerEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  const handleReset = () => {
+    if (window.confirm('Clear all conversation turns and start fresh?')) reset();
+  };
+
+  const handleLoadDemo = () => {
+    if (
+      hasNodes &&
+      !demoMode &&
+      !window.confirm('Replace your current tree with the demo? (Export first if you want to keep it.)')
+    ) {
+      return;
+    }
+    loadDemo();
+  };
 
   // Export JSON file download
   const handleExport = () => {
@@ -66,12 +102,12 @@ export function AppShell() {
     reader.onload = (event) => {
       const content = event.target?.result as string;
       if (content) {
-        const success = importJSON(content);
-        if (success) {
-          alert('Tree imported successfully! 🌸');
-        } else {
-          alert('Failed to parse JSON backup file.');
-        }
+        const { ok, count } = importJSON(content);
+        pushToast({
+          message: ok
+            ? `🌸 Imported ${count} turn${count === 1 ? '' : 's'}`
+            : "😿 That file doesn't look like a Sakura Chat export",
+        });
       }
     };
     reader.readAsText(file);
@@ -95,16 +131,18 @@ export function AppShell() {
       <header className="border-b-2 border-[var(--ink)] bg-white/95 backdrop-blur px-4 py-2.5 flex items-center justify-between shrink-0 z-30">
         {/* Logo and Brand */}
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-[var(--pink-main)] border-2 border-[var(--ink)] flex items-center justify-center shadow-[0_2px_0_var(--ink)] shrink-0">
+          <div className="hidden sm:flex w-10 h-10 rounded-2xl bg-[var(--pink-main)] border-2 border-[var(--ink)] items-center justify-center shadow-[0_2px_0_var(--ink)] shrink-0">
             <span className="text-xl">🌸</span>
           </div>
-          <div>
+          {/* Live mascot: follows the global mascot state (thinking, writing, success...) */}
+          <MascotWidget size="sm" />
+          <div className="hidden sm:block">
             <div className="flex items-center gap-1.5">
               <h1 className="text-lg md:text-xl font-heading font-bold text-[var(--ink)] tracking-tight leading-none">
                 Sakura Chat
               </h1>
               <span className="text-[10px] font-heading font-extrabold px-1.5 py-0.5 rounded-full bg-[var(--mint)] border border-[var(--ink)] text-[var(--ink)]">
-                M4 Router
+                M5 Polish
               </span>
             </div>
             <p className="text-[11px] font-body text-[var(--ink-light)] font-semibold hidden sm:block">
@@ -154,7 +192,7 @@ export function AppShell() {
 
           {/* Demo Button */}
           <button
-            onClick={loadDemo}
+            onClick={handleLoadDemo}
             className={`sticker-button text-xs px-3 py-1.5 transition-all ${
               demoMode
                 ? 'bg-[var(--butter)] text-[var(--ink)]'
@@ -166,25 +204,85 @@ export function AppShell() {
             <span className="hidden sm:inline">Demo Mode</span>
           </button>
 
-          {/* Export JSON */}
-          <button
-            onClick={handleExport}
-            className="p-1.5 md:px-2.5 md:py-1.5 sticker-button bg-white hover:bg-[var(--cream)] text-[var(--ink)] text-xs"
-            title="Export conversation tree as JSON"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Export</span>
-          </button>
+          {/* Data actions: inline on desktop */}
+          <div className="hidden md:flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              className="md:px-2.5 md:py-1.5 sticker-button bg-white hover:bg-[var(--cream)] text-[var(--ink)] text-xs"
+              title="Export conversation tree as JSON"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export</span>
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="md:px-2.5 md:py-1.5 sticker-button bg-white hover:bg-[var(--cream)] text-[var(--ink)] text-xs"
+              title="Import conversation tree from JSON"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Import</span>
+            </button>
+            <button
+              onClick={handleReset}
+              className="p-1.5 sticker-button bg-white hover:bg-red-50 text-[var(--ink)] hover:text-red-600 text-xs"
+              title="Reset to blank canvas"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
-          {/* Import JSON */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 md:px-2.5 md:py-1.5 sticker-button bg-white hover:bg-[var(--cream)] text-[var(--ink)] text-xs"
-            title="Import conversation tree from JSON"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Import</span>
-          </button>
+          {/* Data actions: overflow menu on mobile */}
+          <div ref={menuRef} className="relative md:hidden">
+            <button
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="p-1.5 sticker-button bg-white text-[var(--ink)]"
+              title="More actions"
+            >
+              <Ellipsis className="w-4 h-4" />
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-2 z-40 w-44 sticker-static bg-white p-1.5 space-y-1"
+              >
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    handleExport();
+                  }}
+                  className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-heading font-semibold text-[var(--ink)] hover:bg-[var(--cream)]"
+                >
+                  <Download className="w-4 h-4" />
+                  Export JSON
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    fileInputRef.current?.click();
+                  }}
+                  className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-heading font-semibold text-[var(--ink)] hover:bg-[var(--cream)]"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import JSON
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    handleReset();
+                  }}
+                  className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-heading font-semibold text-[var(--ink)] hover:bg-[var(--cream)]"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset
+                </button>
+              </div>
+            )}
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -192,19 +290,6 @@ export function AppShell() {
             onChange={handleFileChange}
             className="hidden"
           />
-
-          {/* Reset */}
-          <button
-            onClick={() => {
-              if (window.confirm('Clear all conversation turns and start fresh?')) {
-                reset();
-              }
-            }}
-            className="p-1.5 sticker-button bg-white hover:bg-red-50 text-[var(--ink)] hover:text-red-600 text-xs"
-            title="Reset to blank canvas"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
         </div>
       </header>
 

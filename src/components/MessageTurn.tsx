@@ -1,13 +1,25 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useStore } from '@/lib/store';
 import type { TurnNode } from '@/lib/types';
 import { MASCOTS } from '@/lib/constants';
 import { MascotWidget } from './MascotWidget';
-import { ExternalLink, GitFork, Globe, Pin, RotateCcw, Search, Sparkles } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  GitFork,
+  Globe,
+  Pencil,
+  Pin,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 
 // -------------------------------------------------------------
 // Empty Conversation State
@@ -25,7 +37,7 @@ export function EmptyChatState({ onSelectPrompt }: { onSelectPrompt: (p: string)
 
   return (
     <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-12 px-4 space-y-6">
-      <MascotWidget size="xl" state="idle" showSpeechBubble speechText="Hello! I'm ready to chat! ✨" />
+      <MascotWidget size="xl" state="sleeping" showSpeechBubble speechText="Psst… wake me with a question! 💤" />
 
       <div>
         <h2 className="text-2xl md:text-3xl font-heading font-bold text-[var(--ink)]">
@@ -69,6 +81,10 @@ export function MessageTurn({
   compact = false,
   sideBranches,
   onOpenSide,
+  onEdit,
+  canEdit = true,
+  onDelete,
+  versions,
 }: {
   node: TurnNode;
   isFocused?: boolean;
@@ -77,7 +93,29 @@ export function MessageTurn({
   compact?: boolean;
   sideBranches?: { id: string; title: string }[];
   onOpenSide?: (rootId: string) => void;
+  /** Saves an edit as a new sibling version. */
+  onEdit?: (text: string) => void;
+  canEdit?: boolean;
+  onDelete?: () => void;
+  /** Present when this turn has edited sibling versions. */
+  versions?: { index: number; total: number; onPrev: () => void; onNext: () => void };
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const canSave = canEdit && draft.trim().length > 0 && draft.trim() !== node.user.trim();
+  const save = () => {
+    if (!canSave) return;
+    onEdit?.(draft);
+    setEditing(false);
+  };
+  const bubbleMascotState =
+    node.status === 'error'
+      ? 'error'
+      : node.status === 'streaming'
+      ? 'writing'
+      : node.status === 'thinking' || node.status === 'routing'
+      ? 'thinking'
+      : 'idle';
   const isSide = node.kind === 'side';
   const hasCitations = node.citations && node.citations.length > 0;
   const hasSearchQueries = node.searchQueries && node.searchQueries.length > 0;
@@ -93,8 +131,97 @@ export function MessageTurn({
     >
       {/* User Bubble */}
       <div className="flex justify-end items-start gap-2.5">
-        <div className={`${compact ? 'max-w-[90%] text-sm' : 'max-w-[85%] md:max-w-[75%]'} sticker-static bg-[var(--butter)] text-[var(--ink)] px-4 py-3 border-[var(--border-w)] border-[var(--ink)] font-body text-sm md:text-base shadow-[0_3px_0_var(--ink)]`}>
-          <p className="whitespace-pre-wrap">{node.user}</p>
+        <div
+          className={`flex flex-col items-end gap-1.5 ${
+            compact ? 'max-w-[90%]' : 'max-w-[85%] md:max-w-[75%]'
+          } ${editing ? 'w-full' : ''}`}
+        >
+          {editing ? (
+            <div className="w-full sticker-static bg-[var(--butter)] p-2.5 space-y-2">
+              <textarea
+                autoFocus
+                value={draft}
+                rows={3}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    setEditing(false);
+                  } else if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    save();
+                  }
+                }}
+                className="w-full rounded-xl border-2 border-[var(--ink)] bg-white p-2 text-sm font-body text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--pink-deep)]"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  className="sticker-button bg-white px-3 py-1 text-xs text-[var(--ink)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={save}
+                  disabled={!canSave}
+                  className="sticker-button bg-[var(--pink-main)] hover:bg-[var(--pink-deep)] px-3 py-1 text-xs text-[var(--ink)] disabled:opacity-50"
+                >
+                  Save as new version
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="sticker-static bg-[var(--butter)] text-[var(--ink)] px-4 py-3 border-[var(--border-w)] border-[var(--ink)] font-body text-sm md:text-base shadow-[0_3px_0_var(--ink)]">
+              <p className="whitespace-pre-wrap">{node.user}</p>
+            </div>
+          )}
+
+          {!editing && (versions || onEdit) && (
+            <div className="flex items-center gap-2 text-[11px] font-heading font-semibold text-[var(--ink-light)]">
+              {versions && versions.total > 1 && (
+                <span className="inline-flex items-center gap-0.5 rounded-full border border-[var(--ink)]/30 bg-white/80 px-1">
+                  <button
+                    type="button"
+                    onClick={versions.onPrev}
+                    disabled={versions.index <= 0}
+                    className="p-0.5 disabled:opacity-30 hover:text-[var(--ink)]"
+                    title="Previous version"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="px-0.5 tabular-nums text-[var(--ink)]">
+                    {versions.index + 1}/{versions.total}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={versions.onNext}
+                    disabled={versions.index >= versions.total - 1}
+                    className="p-0.5 disabled:opacity-30 hover:text-[var(--ink)]"
+                    title="Next version"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              )}
+              {onEdit && (
+                <button
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => {
+                    setDraft(node.user);
+                    setEditing(true);
+                  }}
+                  className="inline-flex items-center gap-1 hover:text-[var(--ink)] disabled:opacity-40"
+                  title={canEdit ? 'Edit as a new version' : 'Wait for the reply to finish'}
+                >
+                  <Pencil className="w-3 h-3" />
+                  Edit
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div className="w-8 h-8 rounded-full bg-[var(--ink)] text-white flex items-center justify-center font-heading text-xs font-bold shrink-0 border border-[var(--ink)] shadow-[0_2px_0_var(--ink)]">
           👤
@@ -107,7 +234,7 @@ export function MessageTurn({
           <MascotWidget
             size="sm"
             mascot={node.webSearchEnabled ? 'pip' : undefined}
-            state={node.status === 'streaming' ? 'writing' : 'idle'}
+            state={bubbleMascotState}
           />
         </div>
 
@@ -136,6 +263,17 @@ export function MessageTurn({
               )}
             </div>
 
+            <div className="flex items-center gap-1.5">
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="p-1 rounded-full text-[var(--ink-light)] hover:text-red-600 hover:bg-red-50 opacity-70 hover:opacity-100 transition-all"
+                title="Delete this turn and everything below it"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
             {/* Branch from here button */}
             <button
               onClick={onBranch}
@@ -145,6 +283,7 @@ export function MessageTurn({
               <GitFork className="w-3 h-3" />
               <span>Branch</span>
             </button>
+            </div>
           </div>
 
           {/* Search Queries announcement if search was performed */}

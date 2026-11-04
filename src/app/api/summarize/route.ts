@@ -1,7 +1,9 @@
 import { callMeta } from '@/lib/meta-server';
 import { SUMMARIZER_SYSTEM_PROMPT } from '@/lib/prompts';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: Request) {
+  if (!rateLimit(req, 'summarize', 40, 60_000).ok) return Response.json({ summary: null });
   try {
     const body = await req.json();
     const user = String(body?.user ?? '').slice(0, 2000);

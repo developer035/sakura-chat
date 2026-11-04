@@ -4,8 +4,10 @@ import {
   META_RESPONSES_URL,
   META_MODEL_CHAT,
   MAX_MESSAGE_TOKENS,
+  CHAT_REASONING_EFFORT,
 } from '@/lib/constants';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'edge';
 
@@ -16,6 +18,14 @@ export async function POST(req: Request) {
     return Response.json(
       { error: 'META_API_KEY is not configured on the server.' },
       { status: 500 }
+    );
+  }
+
+  const limited = rateLimit(req, 'chat', 20, 60_000);
+  if (!limited.ok) {
+    return Response.json(
+      { error: 'Too many messages. Have a sip of tea 🍵 and try again in a minute.' },
+      { status: 429, headers: { 'Retry-After': String(limited.retryAfter) } }
     );
   }
 
@@ -32,6 +42,18 @@ export async function POST(req: Request) {
   }
 
   const { messages = [], system = CHAT_SYSTEM_PROMPT, webSearch = false } = body;
+
+  // Abuse protection: payload caps (the app's own context budget stays well below these).
+  const totalChars = messages.reduce((n, m) => n + String(m?.content ?? '').length, 0);
+  if (
+    !Array.isArray(messages) ||
+    messages.length > 200 ||
+    messages.some((m) => String(m?.content ?? '').length > 40_000) ||
+    totalChars > 250_000 ||
+    String(system).length > 4_000
+  ) {
+    return Response.json({ error: 'Request too large.' }, { status: 413 });
+  }
 
   try {
     // Mode 1: Search Grounding via Meta Responses API
@@ -205,6 +227,7 @@ export async function POST(req: Request) {
         model: META_MODEL_CHAT,
         stream: true,
         max_tokens: MAX_MESSAGE_TOKENS,
+        reasoning_effort: CHAT_REASONING_EFFORT,
         messages: [{ role: 'system', content: system }, ...messages],
       }),
     });

@@ -1,7 +1,42 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import type { AppStore, MascotName, MascotState, TurnNode, WindowState } from './types';
 import { DEMO_NODES } from './demo-data';
+import { sanitizeNodes, sanitizeStatus, sanitizeWindows } from './sanitize';
+
+let storageWarned = false;
+
+/** localStorage that never throws (private mode, quota exceeded) and warns once. */
+const safeStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      return localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    try {
+      localStorage.setItem(name, value);
+    } catch {
+      if (!storageWarned) {
+        storageWarned = true;
+        queueMicrotask(() =>
+          useStore.getState().pushToast({
+            message: '💾 Storage is full, so Export your tree to keep it safe',
+          })
+        );
+      }
+    }
+  },
+  removeItem: (name) => {
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      /* ignore */
+    }
+  },
+};
 
 export const useStore = create<AppStore>()(
   persist(
@@ -96,6 +131,32 @@ export const useStore = create<AppStore>()(
             nodes: allNodes,
             activeId: newActiveId,
             windows: newWindows,
+          };
+        });
+      },
+
+      restoreSnapshot: (snapshot) => {
+        set((state) => {
+          const restored: Record<string, TurnNode> = {};
+          for (const [id, n] of Object.entries(snapshot.nodes)) {
+            // A reply that was mid-stream when deleted cannot resume: offer Retry instead.
+            if (n) restored[id] = { ...n, status: sanitizeStatus(n.status) };
+          }
+          const nodes = { ...state.nodes, ...restored };
+          const known = new Set(state.windows.map((w) => w.id));
+          const windows = [
+            ...state.windows,
+            ...snapshot.windows.filter(
+              (w) => !known.has(w.id) && nodes[w.anchorId] && (!w.rootId || nodes[w.rootId])
+            ),
+          ]
+            .sort((a, b) => a.z - b.z)
+            .slice(-3);
+          return {
+            nodes,
+            windows,
+            activeId:
+              snapshot.activeId && nodes[snapshot.activeId] ? snapshot.activeId : state.activeId,
           };
         });
       },
@@ -207,24 +268,29 @@ export const useStore = create<AppStore>()(
         return JSON.stringify(exportData, null, 2);
       },
 
-      importJSON: (json: string): boolean => {
+      importJSON: (json: string) => {
         try {
           const parsed = JSON.parse(json);
-          if (!parsed || typeof parsed !== 'object' || !parsed.nodes) {
-            return false;
-          }
+          const nodes = sanitizeNodes(parsed?.nodes);
+          const count = Object.keys(nodes).length;
+          if (count === 0) return { ok: false, count: 0 };
+          const activeId =
+            typeof parsed.activeId === 'string' && nodes[parsed.activeId]
+              ? parsed.activeId
+              : Object.keys(nodes)[0];
+          const mascot = parsed.currentMascot;
           set({
-            nodes: parsed.nodes,
-            activeId: parsed.activeId || Object.keys(parsed.nodes)[0] || null,
-            currentMascot: parsed.currentMascot || 'mochi',
+            nodes,
+            activeId,
+            currentMascot: mascot === 'boba' || mascot === 'pip' ? mascot : 'mochi',
             windows: [],
             demoMode: false,
             focusRequest: null,
             inspectorTarget: null,
           });
-          return true;
+          return { ok: true, count };
         } catch {
-          return false;
+          return { ok: false, count: 0 };
         }
       },
 
@@ -258,7 +324,19 @@ export const useStore = create<AppStore>()(
     }),
     {
       name: 'sakura-chat-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeStorage),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<AppStore>;
+        const nodes = sanitizeNodes(p.nodes);
+        const activeId = p.activeId && nodes[p.activeId] ? p.activeId : null;
+        return {
+          ...current,
+          ...p,
+          nodes,
+          activeId,
+          windows: sanitizeWindows(p.windows, nodes),
+        };
+      },
       partialize: (state) => ({
         nodes: state.nodes,
         activeId: state.activeId,
