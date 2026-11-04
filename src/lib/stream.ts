@@ -1,24 +1,45 @@
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import { STREAM_TIMEOUT_MS } from './constants';
 import type { ChatMessage } from './context';
+import type { SearchCitation } from './types';
 
 export interface StreamChatPayload {
   messages: ChatMessage[];
   system?: string;
+  webSearch?: boolean;
+}
+
+export interface StreamChatCallbacks {
+  onToken: (accumulated: string) => void;
+  onSearchQuery?: (query: string) => void;
+  onCitations?: (citations: SearchCitation[]) => void;
+  onDone: () => void;
+  onError: (error: Error) => void;
 }
 
 export async function streamChat(
   body: StreamChatPayload,
-  onToken: (accumulated: string) => void,
-  onDone: () => void,
-  onError: (error: Error) => void,
-  signal?: AbortSignal
+  onTokenOrCallbacks: ((accumulated: string) => void) | StreamChatCallbacks,
+  onDoneArg?: () => void,
+  onErrorArg?: (error: Error) => void,
+  signalArg?: AbortSignal
 ): Promise<() => void> {
+  const callbacks: StreamChatCallbacks =
+    typeof onTokenOrCallbacks === 'function'
+      ? {
+          onToken: onTokenOrCallbacks,
+          onDone: onDoneArg || (() => {}),
+          onError: onErrorArg || (() => {}),
+        }
+      : onTokenOrCallbacks;
+
+  const signal = typeof onTokenOrCallbacks === 'function' ? signalArg : undefined;
+
   let buffer = '';
   let rafId: number | null = null;
 
   const flush = () => {
-    onToken(buffer);
+    callbacks.onToken(buffer);
     rafId = null;
   };
 
@@ -29,15 +50,16 @@ export async function streamChat(
   };
 
   const controller = new AbortController();
+  // Allow up to 45s for deep web search grounding queries
+  const timeoutMs = body.webSearch ? 45000 : STREAM_TIMEOUT_MS;
   const timeoutId = setTimeout(() => {
-    controller.abort(new Error('Streaming response timed out after 30 seconds.'));
-  }, STREAM_TIMEOUT_MS);
+    controller.abort(new Error('Streaming response timed out.'));
+  }, timeoutMs);
 
   if (signal) {
     signal.addEventListener('abort', () => controller.abort(signal.reason));
   }
 
-  // Cancel function returned to caller
   const cancel = () => {
     controller.abort();
     if (rafId !== null) {
@@ -72,6 +94,27 @@ export async function streamChat(
         }
         try {
           const parsed = JSON.parse(event.data);
+
+          // Handle live search query announcement
+          if (parsed.type === 'search_query' && typeof parsed.query === 'string') {
+            callbacks.onSearchQuery?.(parsed.query);
+            return;
+          }
+
+          // Handle grounding metadata (citations & all search queries)
+          if (parsed.type === 'grounding_metadata') {
+            if (Array.isArray(parsed.citations)) {
+              callbacks.onCitations?.(parsed.citations);
+            }
+            if (Array.isArray(parsed.searchQueries)) {
+              for (const q of parsed.searchQueries) {
+                callbacks.onSearchQuery?.(q);
+              }
+            }
+            return;
+          }
+
+          // Handle standard token delta
           const token = parsed.choices?.[0]?.delta?.content;
           if (typeof token === 'string' && token.length > 0) {
             buffer += token;
@@ -96,8 +139,8 @@ export async function streamChat(
       cancelAnimationFrame(rafId);
       rafId = null;
     }
-    onToken(buffer);
-    onDone();
+    callbacks.onToken(buffer);
+    callbacks.onDone();
   } catch (err: unknown) {
     clearTimeout(timeoutId);
     if (rafId !== null) {
@@ -105,10 +148,10 @@ export async function streamChat(
       rafId = null;
     }
     if (buffer) {
-      onToken(buffer);
+      callbacks.onToken(buffer);
     }
     const finalError = err instanceof Error ? err : new Error(String(err));
-    onError(finalError);
+    callbacks.onError(finalError);
   }
 
   return cancel;

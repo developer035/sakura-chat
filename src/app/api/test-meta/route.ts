@@ -78,30 +78,6 @@ export async function GET() {
 
   results.totalLatencyMs = Date.now() - startTime;
 
-  // Test 3: Test Responses API with web_search tool
-  try {
-    const respRes = await fetch('https://api.meta.ai/v1/responses', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'muse-spark-1.3',
-        input: 'What is the current year and latest news?',
-        tools: [{ type: 'web_search' }],
-      }),
-    });
-    results.responsesEndpointStatus = respRes.status;
-    if (respRes.ok) {
-      results.responsesData = await respRes.json();
-    } else {
-      results.responsesError = await respRes.text();
-    }
-  } catch (err: unknown) {
-    results.responsesException = err instanceof Error ? err.message : String(err);
-  }
-
   return Response.json(results, {
     status: results.success ? 200 : 502,
   });

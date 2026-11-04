@@ -1,5 +1,6 @@
 export const META_MODEL_CHAT = 'muse-spark-1.3';
 export const META_API_URL = 'https://api.meta.ai/v1/chat/completions';
+export const META_RESPONSES_URL = 'https://api.meta.ai/v1/responses';
 
 export const SYSTEM_PROMPT_RESERVE = 500;
 export const DEFAULT_CONTEXT_BUDGET = 30000;

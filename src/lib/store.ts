@@ -12,6 +12,7 @@ export const useStore = create<AppStore>()(
       demoMode: false,
       currentMascot: 'mochi',
       mascotState: 'idle',
+      webSearchEnabled: false,
 
       addNode: (node: TurnNode) => {
         set((state) => ({
@@ -88,6 +89,10 @@ export const useStore = create<AppStore>()(
 
       setCurrentMascot: (currentMascot: MascotName) => {
         set({ currentMascot });
+      },
+
+      setWebSearchEnabled: (webSearchEnabled: boolean) => {
+        set({ webSearchEnabled });
       },
 
       openWindow: (nodeId: string) => {

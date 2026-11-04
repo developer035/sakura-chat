@@ -14,6 +14,11 @@ export type MascotState =
 
 export type MascotName = 'mochi' | 'boba' | 'pip';
 
+export interface SearchCitation {
+  url: string;
+  title?: string;
+}
+
 export interface TurnNode {
   id: string;
   parentId: string | null;
@@ -26,6 +31,9 @@ export interface TurnNode {
   excluded?: boolean;
   pin?: string; // pinned return summary from closed side branch
   createdAt: number;
+  searchQueries?: string[];
+  citations?: SearchCitation[];
+  webSearchEnabled?: boolean;
 }
 
 export interface WindowState {
@@ -47,6 +55,7 @@ export interface AppStore {
   demoMode: boolean;
   currentMascot: MascotName;
   mascotState: MascotState;
+  webSearchEnabled: boolean;
 
   // Node actions
   addNode: (node: TurnNode) => void;
@@ -57,6 +66,7 @@ export interface AppStore {
   // Mascot actions
   setMascotState: (state: MascotState) => void;
   setCurrentMascot: (mascot: MascotName) => void;
+  setWebSearchEnabled: (enabled: boolean) => void;
 
   // Window actions
   openWindow: (nodeId: string) => void;

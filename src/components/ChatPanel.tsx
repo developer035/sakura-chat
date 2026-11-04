@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { nanoid } from 'nanoid';
 import { useStore } from '@/lib/store';
-import type { TurnNode } from '@/lib/types';
+import type { TurnNode, SearchCitation } from '@/lib/types';
 import { buildContext } from '@/lib/context';
 import { streamChat } from '@/lib/stream';
 import { CHAT_SYSTEM_PROMPT } from '@/lib/prompts';
@@ -14,13 +14,24 @@ import { getBranchPath, findBranchLeaf } from '@/lib/tree-utils';
 import { MascotWidget } from './MascotWidget';
 import { Breadcrumbs } from './Breadcrumbs';
 import { ChatInput } from './ChatInput';
-import { ArrowDown, GitFork, Pin, RotateCcw, Sparkles, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ExternalLink,
+  GitFork,
+  Globe,
+  Pin,
+  RotateCcw,
+  Search,
+  Sparkles,
+  X,
+} from 'lucide-react';
 
 export function ChatPanel() {
   const nodes = useStore((s) => s.nodes);
   const activeId = useStore((s) => s.activeId);
   const setActive = useStore((s) => s.setActive);
   const currentMascot = useStore((s) => s.currentMascot);
+  const webSearchEnabled = useStore((s) => s.webSearchEnabled);
   const addNode = useStore((s) => s.addNode);
   const updateNode = useStore((s) => s.updateNode);
   const setMascotState = useStore((s) => s.setMascotState);
@@ -54,7 +65,6 @@ export function ChatPanel() {
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    // Remove highlight pulse after 2.5s
     setTimeout(() => {
       setFocusedNodeId((curr) => (curr === nodeId ? null : curr));
     }, 2500);
@@ -82,7 +92,6 @@ export function ChatPanel() {
 
   // Handle sending a new message
   const handleSendMessage = async (text: string) => {
-    // If branching from an earlier node, parent is that node; otherwise parent is current branch leaf
     const isBranching = !!branchingParent;
     const parentId = isBranching ? branchingParent.id : leafId;
     const nodeId = nanoid();
@@ -100,12 +109,14 @@ export function ChatPanel() {
       assistant: '',
       status: 'thinking',
       createdAt: Date.now(),
+      webSearchEnabled,
+      searchQueries: [],
+      citations: [],
     };
 
-    // Clear branching parent banner
     setBranchingParent(null);
     addNode(newNode);
-    setMascotState('thinking');
+    setMascotState(webSearchEnabled ? 'sniffing' : 'thinking');
     scrollToBottom();
 
     try {
@@ -113,29 +124,43 @@ export function ChatPanel() {
         {
           messages,
           system: CHAT_SYSTEM_PROMPT,
+          webSearch: webSearchEnabled,
         },
-        (accumulated) => {
-          updateNode(nodeId, {
-            assistant: accumulated,
-            status: 'streaming',
-          });
-          setMascotState('writing');
-        },
-        () => {
-          updateNode(nodeId, { status: 'done' });
-          setMascotState('idle');
-          setActiveStreamCancel(null);
-        },
-        (error) => {
-          console.error('Chat stream error:', error);
-          updateNode(nodeId, {
-            status: 'error',
-            assistant:
-              (nodes[nodeId]?.assistant || '') +
-              `\n\n*(Error: ${error.message || 'Stream interrupted'}. Please retry.)*`,
-          });
-          setMascotState('error');
-          setActiveStreamCancel(null);
+        {
+          onToken: (accumulated) => {
+            updateNode(nodeId, {
+              assistant: accumulated,
+              status: 'streaming',
+            });
+            setMascotState('writing');
+          },
+          onSearchQuery: (query) => {
+            const currentList = useStore.getState().nodes[nodeId]?.searchQueries || [];
+            if (!currentList.includes(query)) {
+              updateNode(nodeId, {
+                searchQueries: [...currentList, query],
+              });
+            }
+          },
+          onCitations: (citations: SearchCitation[]) => {
+            updateNode(nodeId, { citations });
+          },
+          onDone: () => {
+            updateNode(nodeId, { status: 'done' });
+            setMascotState('idle');
+            setActiveStreamCancel(null);
+          },
+          onError: (error) => {
+            console.error('Chat stream error:', error);
+            updateNode(nodeId, {
+              status: 'error',
+              assistant:
+                (nodes[nodeId]?.assistant || '') +
+                `\n\n*(Error: ${error.message || 'Stream interrupted'}. Please retry.)*`,
+            });
+            setMascotState('error');
+            setActiveStreamCancel(null);
+          },
         }
       );
 
@@ -152,25 +177,40 @@ export function ChatPanel() {
 
   const handleRetry = (node: TurnNode) => {
     if (isStreaming) return;
-    updateNode(node.id, { assistant: '', status: 'thinking' });
-    setMascotState('thinking');
+    updateNode(node.id, { assistant: '', status: 'thinking', searchQueries: [], citations: [] });
+    setMascotState(node.webSearchEnabled ? 'sniffing' : 'thinking');
 
     const historyMessages = buildContext(nodes, node.parentId);
     const messages = [...historyMessages, { role: 'user' as const, content: node.user }];
 
     streamChat(
-      { messages, system: CHAT_SYSTEM_PROMPT },
-      (accumulated) => {
-        updateNode(node.id, { assistant: accumulated, status: 'streaming' });
-        setMascotState('writing');
+      {
+        messages,
+        system: CHAT_SYSTEM_PROMPT,
+        webSearch: node.webSearchEnabled,
       },
-      () => {
-        updateNode(node.id, { status: 'done' });
-        setMascotState('idle');
-      },
-      () => {
-        updateNode(node.id, { status: 'error' });
-        setMascotState('error');
+      {
+        onToken: (accumulated) => {
+          updateNode(node.id, { assistant: accumulated, status: 'streaming' });
+          setMascotState('writing');
+        },
+        onSearchQuery: (query) => {
+          const currentList = useStore.getState().nodes[node.id]?.searchQueries || [];
+          if (!currentList.includes(query)) {
+            updateNode(node.id, { searchQueries: [...currentList, query] });
+          }
+        },
+        onCitations: (citations) => {
+          updateNode(node.id, { citations });
+        },
+        onDone: () => {
+          updateNode(node.id, { status: 'done' });
+          setMascotState('idle');
+        },
+        onError: () => {
+          updateNode(node.id, { status: 'error' });
+          setMascotState('error');
+        },
       }
     );
   };
@@ -221,12 +261,31 @@ export function ChatPanel() {
           ))
         )}
 
-        {/* Mascot Thinking Indicator */}
+        {/* Mascot Thinking / Sniffing Indicator */}
         {activeNode?.status === 'thinking' && !activeNode.assistant && (
-          <div className="flex items-center gap-3 p-3 bg-white/80 rounded-2xl border-2 border-[var(--ink)]/20 w-fit animate-pulse shadow-sm">
-            <MascotWidget size="sm" state="thinking" />
-            <div className="text-xs font-heading font-semibold text-[var(--ink)]">
-              {MASCOTS[currentMascot]?.name || 'Mochi'} is pondering with Meta Muse Spark... 🌸
+          <div
+            className={`flex items-center gap-3 p-3 rounded-2xl border-2 border-[var(--ink)]/25 w-fit animate-pulse shadow-sm ${
+              activeNode.webSearchEnabled
+                ? 'bg-[var(--sky)]/35 text-[var(--ink)]'
+                : 'bg-white/80 text-[var(--ink)]'
+            }`}
+          >
+            <MascotWidget
+              size="sm"
+              mascot={activeNode.webSearchEnabled ? 'pip' : currentMascot}
+              state={activeNode.webSearchEnabled ? 'sniffing' : 'thinking'}
+            />
+            <div className="text-xs font-heading font-semibold">
+              {activeNode.webSearchEnabled ? (
+                <span className="flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-blue-600 animate-spin-slow" />
+                  <span>Pip is querying the live web with Meta Muse Spark... 🌐🔍</span>
+                </span>
+              ) : (
+                <span>
+                  {MASCOTS[currentMascot]?.name || 'Mochi'} is pondering with Meta Muse Spark... 🌸
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -288,9 +347,9 @@ function EmptyChatState({ onSelectPrompt }: { onSelectPrompt: (p: string) => voi
 
   const starterPrompts = [
     '🌸 Plan a cozy Japanese kissaten & cat sanctuary in Kyoto',
+    '🌐 What are the latest AI hackathons and news today in 2026?',
     '🍵 What are the secrets to brewing ceremonial Uji matcha?',
     '🎮 Brainstorm a kawaii pixel-art roguelike RPG game loop',
-    '💡 Write a clean Next.js 16 Edge API route for SSE streaming',
   ];
 
   return (
@@ -302,8 +361,8 @@ function EmptyChatState({ onSelectPrompt }: { onSelectPrompt: (p: string) => voi
           Welcome to Sakura Chat! 🌸
         </h2>
         <p className="text-sm md:text-base text-[var(--ink-light)] mt-2">
-          Chat naturally with {mascotInfo.name}. Ask questions, explore tangents, and branch ideas
-          without losing context.
+          Chat naturally with {mascotInfo.name}. Ask questions, explore tangents, branch ideas, and
+          ground facts with live web search!
         </p>
       </div>
 
@@ -329,7 +388,7 @@ function EmptyChatState({ onSelectPrompt }: { onSelectPrompt: (p: string) => voi
 }
 
 // -------------------------------------------------------------
-// Message Turn: Shows User Bubble + Assistant Bubble
+// Message Turn: Shows User Bubble + Assistant Bubble with Citations
 // -------------------------------------------------------------
 function MessageTurn({
   node,
@@ -343,6 +402,8 @@ function MessageTurn({
   onBranch: () => void;
 }) {
   const isSide = node.kind === 'side';
+  const hasCitations = node.citations && node.citations.length > 0;
+  const hasSearchQueries = node.searchQueries && node.searchQueries.length > 0;
 
   return (
     <div
@@ -366,22 +427,34 @@ function MessageTurn({
       {/* Assistant Bubble */}
       <div className="flex justify-start items-start gap-2.5">
         <div className="shrink-0 mt-0.5">
-          <MascotWidget size="sm" state={node.status === 'streaming' ? 'writing' : 'idle'} />
+          <MascotWidget
+            size="sm"
+            mascot={node.webSearchEnabled ? 'pip' : undefined}
+            state={node.status === 'streaming' ? 'writing' : 'idle'}
+          />
         </div>
 
         <div
           className={`max-w-[90%] md:max-w-[80%] sticker bg-white text-[var(--ink)] p-4 md:p-5 border-[var(--border-w)] relative group ${
             isSide
               ? 'border-[var(--lavender)] shadow-[0_3px_0_var(--lavender)]'
+              : node.webSearchEnabled
+              ? 'border-[var(--sky)] shadow-[0_3px_0_var(--sky)]'
               : 'border-[var(--ink)] shadow-[0_3px_0_var(--ink)]'
           }`}
         >
-          {/* Header row in bubble with side tag and branch button */}
-          <div className="flex items-center justify-between mb-2">
-            <div>
+          {/* Header row in bubble with tags and branch button */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {isSide && (
                 <span className="inline-flex items-center gap-1 bg-[var(--lavender)] px-2.5 py-0.5 rounded-full text-xs font-heading font-bold text-[var(--ink)] border border-[var(--ink)]">
                   <span>🧋 Side Tangent</span>
+                </span>
+              )}
+              {node.webSearchEnabled && (
+                <span className="inline-flex items-center gap-1 bg-[var(--sky)] px-2.5 py-0.5 rounded-full text-xs font-heading font-bold text-blue-900 border border-[var(--ink)] shadow-xs">
+                  <Globe className="w-3 h-3 text-blue-700" />
+                  <span>Web Grounded</span>
                 </span>
               )}
             </div>
@@ -397,12 +470,65 @@ function MessageTurn({
             </button>
           </div>
 
+          {/* Search Queries announcement if search was performed */}
+          {hasSearchQueries && (
+            <div className="mb-3 p-2 bg-[var(--sky)]/25 border border-[var(--sky)] rounded-xl text-xs font-heading text-[var(--ink)] flex flex-wrap items-center gap-1.5">
+              <span className="font-bold text-[11px] text-blue-800 flex items-center gap-1">
+                <Search className="w-3 h-3" /> Searched:
+              </span>
+              {node.searchQueries!.map((q, idx) => (
+                <span
+                  key={idx}
+                  className="px-2 py-0.5 bg-white/95 rounded-md border border-[var(--ink)]/20 text-[11px] font-mono text-[var(--ink)]"
+                >
+                  "{q}"
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Markdown Assistant Content */}
           <div className="prose prose-sm md:prose-base max-w-none text-[var(--ink)] leading-relaxed space-y-2">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {node.assistant || (node.status === 'thinking' ? '*Thinking...*' : '')}
+              {node.assistant || (node.status === 'thinking' ? '*Searching and thinking...*' : '')}
             </ReactMarkdown>
           </div>
+
+          {/* Citations & Source Links */}
+          {hasCitations && (
+            <div className="mt-4 pt-3 border-t-2 border-[var(--ink)]/10 space-y-2">
+              <div className="text-xs font-heading font-bold text-[var(--ink)] flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-blue-600" />
+                <span>Sources & Citations ({node.citations!.length})</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {node.citations!.map((c, i) => {
+                  let domain = c.url;
+                  try {
+                    domain = new URL(c.url).hostname.replace(/^www\./, '');
+                  } catch {
+                    // ignore
+                  }
+                  return (
+                    <a
+                      key={i}
+                      href={c.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-[var(--sky)]/30 hover:bg-[var(--sky)] text-[var(--ink)] border border-[var(--ink)]/35 hover:border-[var(--ink)] rounded-full text-xs font-body font-semibold transition-all hover:scale-102 shadow-xs"
+                      title={c.title || c.url}
+                    >
+                      <ExternalLink className="w-3 h-3 opacity-60 shrink-0" />
+                      <span className="max-w-[200px] truncate">{c.title || domain}</span>
+                      <span className="text-[10px] text-[var(--ink-light)] opacity-70">
+                        ({domain})
+                      </span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Side note pin if present */}
           {node.pin && (
