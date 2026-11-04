@@ -8,6 +8,7 @@ import type { TurnNode } from '@/lib/types';
 import { MASCOTS } from '@/lib/constants';
 import { MascotWidget } from './MascotWidget';
 import { AttachmentStrip, GeneratedImages } from './AttachmentStrip';
+import { DocumentCard, DownloadMenu } from './DocumentCard';
 import {
   ChevronLeft,
   ChevronRight,
@@ -270,6 +271,9 @@ export function MessageTurn({
             </div>
 
             <div className="flex items-center gap-1.5">
+            {node.status === 'done' && !node.tool && node.assistant.trim().length > 0 && (
+              <DownloadMenu markdown={node.assistant} />
+            )}
             {onDelete && (
               <button
                 type="button"
@@ -317,11 +321,15 @@ export function MessageTurn({
           {node.outputs && node.outputs.length > 0 && <GeneratedImages items={node.outputs} />}
 
           {/* Markdown Assistant Content */}
-          <div className="prose prose-sm md:prose-base max-w-none text-[var(--ink)] leading-relaxed space-y-2">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {node.assistant || (node.status === 'thinking' ? '*Searching and thinking...*' : '')}
-            </ReactMarkdown>
-          </div>
+          {node.tool === 'document' && node.status !== 'error' ? (
+            <DocumentCard node={node} />
+          ) : (
+            <div className="prose prose-sm md:prose-base max-w-none text-[var(--ink)] leading-relaxed space-y-2">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {node.assistant || (node.status === 'thinking' && !node.tool ? '*Searching and thinking...*' : '')}
+              </ReactMarkdown>
+            </div>
+          )}
 
           {/* Citations & Source Links */}
           {hasCitations && (

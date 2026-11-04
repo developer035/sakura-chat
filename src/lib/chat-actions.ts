@@ -5,7 +5,7 @@ import { MAX_IMAGES_PER_SESSION } from './constants';
 import { useStore } from './store';
 import { buildRequestMessages } from './request';
 import { streamChat } from './stream';
-import { CHAT_SYSTEM_PROMPT } from './prompts';
+import { CHAT_SYSTEM_PROMPT, DOCUMENT_SYSTEM_PROMPT } from './prompts';
 import { branchSummary, routeMessage, summarize } from './api';
 import { collectSubtree, getMainThread, versionOrigin } from './tree-utils';
 import type { Attachment, ImageSize, NodeKind, SearchCitation, ToolMode, TurnNode } from './types';
@@ -97,7 +97,11 @@ function runStream(nodeId: string) {
     // Attachments force a plain (non-search) request: the web-search path is text only.
     const hasFiles = !!node.attachments?.length;
     void streamChat(
-    { messages, system: CHAT_SYSTEM_PROMPT, webSearch: node.webSearchEnabled && !hasFiles },
+    {
+      messages,
+      system: node.tool === 'document' ? DOCUMENT_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT,
+      webSearch: node.webSearchEnabled && !hasFiles && !node.tool,
+    },
     {
       signal: controller.signal,
       onToken: (accumulated) => {

@@ -231,6 +231,20 @@ export function ChatInput({
         </div>
       )}
 
+      {tool === 'document' && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-[var(--ink)] bg-[var(--lavender)]/60 px-2.5 py-1.5 text-xs font-heading font-semibold text-[var(--ink)]">
+          <span>📄 Document mode: I will write a full document you can download as PDF, Word or Markdown</span>
+          <button
+            type="button"
+            onClick={() => setTool(null)}
+            className="ml-auto p-0.5 rounded-full hover:bg-white/70"
+            title="Leave Document mode"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Pending attachment chips */}
       {pending.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -307,6 +321,8 @@ export function ChatInput({
           placeholder={
             tool === 'image'
               ? 'Describe the image you want… 🎨 (Enter to create)'
+              : tool === 'document'
+              ? 'Describe the document you want… 📄 (Enter to write it)'
               : webSearchEnabled
               ? `Ask ${mascotInfo.name} with live web search... 🌐 (Enter to send)`
               : `Ask ${mascotInfo.name} anything... 🌸 (Enter to send, Shift+Enter for new line)`
@@ -326,7 +342,7 @@ export function ChatInput({
               className={`sticker-button text-xs px-2.5 py-2 flex items-center gap-1.5 disabled:opacity-40 ${
                 tool ? 'bg-[var(--lavender)] font-bold' : 'bg-white hover:bg-[var(--cream)] text-[var(--ink-light)] hover:text-[var(--ink)]'
               }`}
-              title="Create an image"
+              title="Create an image or a document"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Create</span>
@@ -348,6 +364,19 @@ export function ChatInput({
                 >
                   🖼️ Image
                   <span className="block text-[11px] font-normal text-[var(--ink-light)]">Muse Image 1.0</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTool('document');
+                    setMenuOpen(false);
+                    textareaRef.current?.focus();
+                  }}
+                  className="w-full text-left rounded-xl px-3 py-2 text-sm font-heading font-semibold text-[var(--ink)] hover:bg-[var(--cream)]"
+                >
+                  📄 Document
+                  <span className="block text-[11px] font-normal text-[var(--ink-light)]">PDF · Word · Markdown</span>
                 </button>
               </div>
             )}
