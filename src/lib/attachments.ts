@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import { putBlob } from './file-store';
+import { DocError, docKindOf, ingestDocument } from './documents';
 import type { Attachment } from './types';
 
 export const MAX_FILES_PER_MESSAGE = 5;
@@ -8,7 +9,8 @@ const MAX_LONG_SIDE = 1568;
 const THUMB_SIDE = 96;
 
 /** `accept` attribute for the file picker. */
-export const ACCEPT_ATTR = 'image/png,image/jpeg,image/webp,image/gif';
+export const ACCEPT_ATTR =
+  'image/png,image/jpeg,image/webp,image/gif,.pdf,.docx,.txt,.md,.csv,.json,.xml,.html,.log,.yaml,.yml,.js,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.go,.rs,.sql,.css';
 
 export class IngestError extends Error {}
 
@@ -66,9 +68,17 @@ export async function ingestImageBlob(file: Blob, name: string): Promise<Attachm
   }
 }
 
-/** Ingests any supported file. (Documents are added in the document phase.) */
+/** Ingests any supported file (image or document). Throws IngestError with a friendly message. */
 export async function ingestFile(file: File): Promise<Attachment> {
   if (isImageFile(file)) return ingestImageBlob(file, file.name || 'pasted-image.png');
+  if (docKindOf(file)) {
+    try {
+      return await ingestDocument(file);
+    } catch (err) {
+      if (err instanceof DocError) throw new IngestError(err.message);
+      throw new IngestError(`${file.name} could not be read`);
+    }
+  }
   throw new IngestError(`${file.name || 'That file'} is not a supported file type`);
 }
 

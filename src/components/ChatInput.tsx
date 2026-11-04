@@ -6,6 +6,7 @@ import { useStore } from '@/lib/store';
 import { MASCOTS } from '@/lib/constants';
 import { ACCEPT_ATTR, IngestError, MAX_FILES_PER_MESSAGE, ingestFile } from '@/lib/attachments';
 import { del } from '@/lib/file-store';
+import { MAX_MESSAGE_DOC_CHARS } from '@/lib/documents';
 import type { Attachment, ImageSize, ToolMode } from '@/lib/types';
 
 interface ChatInputProps {
@@ -105,6 +106,11 @@ export function ChatInput({
 
   const handleSubmit = () => {
     if (!canSend || isStreaming) return;
+    const docChars = ready.reduce((n, a) => n + (a.textTokens ?? 0) * 4, 0);
+    if (docChars > MAX_MESSAGE_DOC_CHARS) {
+      pushToast({ message: '🍵 That is a lot of document text for one message. Remove a file and try again.' });
+      return;
+    }
     const text =
       input.trim() ||
       (ready.some((a) => a.kind !== 'image') ? 'Summarize this document.' : 'Describe this image.');
@@ -237,11 +243,24 @@ export function ChatInput({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.att.thumb} alt="" className="w-7 h-7 rounded-md object-cover" />
               ) : p.att ? (
-                <span className="w-7 h-7 flex items-center justify-center">📄</span>
+                <span className="w-7 h-7 flex items-center justify-center">
+                  {p.att.kind === 'image' ? '🖼️' : '📄'}
+                </span>
               ) : (
                 <Loader2 className="w-4 h-4 mx-1.5 animate-spin" />
               )}
               <span className="truncate">{p.att ? p.name : `Reading ${p.name}…`}</span>
+              {p.att?.pages ? <span className="opacity-60 shrink-0">{p.att.pages}p</span> : null}
+              {p.att?.pageImageKeys?.length ? (
+                <span className="shrink-0 text-[10px] bg-[var(--butter)] rounded-full px-1.5" title="No text found, so the first pages are sent as images">
+                  scanned
+                </span>
+              ) : null}
+              {p.att?.truncated ? (
+                <span className="shrink-0 text-[10px] bg-[var(--butter)] rounded-full px-1.5" title="Only the first part is sent">
+                  cut
+                </span>
+              ) : null}
               <button
                 type="button"
                 onClick={() => removePending(p)}
