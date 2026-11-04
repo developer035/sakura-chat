@@ -83,6 +83,7 @@ export function FloatingWindowManager() {
         !e.metaKey &&
         !e.altKey &&
         !isTypingTarget(e.target) &&
+        !st.confirmDialog &&
         st.activeId &&
         st.nodes[st.activeId]
       ) {

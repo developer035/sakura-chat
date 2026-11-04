@@ -8,6 +8,7 @@ export function DemoModeBanner() {
   const demoMode = useStore((s) => s.demoMode);
   const reset = useStore((s) => s.reset);
   const setDemoMode = useStore((s) => s.setDemoMode);
+  const askConfirm = useStore((s) => s.askConfirm);
 
   if (!demoMode) return null;
 
@@ -33,9 +34,12 @@ export function DemoModeBanner() {
         </button>
         <button
           onClick={() => {
-            if (window.confirm('Clear demo data and start with a fresh blank canvas?')) {
-              reset();
-            }
+            askConfirm({
+              title: 'Clear the demo?',
+              message: 'The demo tree will be removed and you will start with a blank canvas.',
+              confirmLabel: 'Clear demo',
+              onConfirm: reset,
+            });
           }}
           className="px-2.5 py-1 bg-[var(--pink-deep)] text-white rounded-full border border-[var(--ink)] hover:bg-[var(--pink-main)] hover:text-[var(--ink)] active:translate-y-0.5 transition-all flex items-center gap-1"
         >

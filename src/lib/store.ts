@@ -53,6 +53,7 @@ export const useStore = create<AppStore>()(
       autoRoute: true,
       toasts: [],
       inspectorTarget: null,
+      confirmDialog: null,
 
       setAutoRoute: (autoRoute: boolean) => set({ autoRoute }),
       pushToast: (toast) => {
@@ -64,6 +65,8 @@ export const useStore = create<AppStore>()(
         set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
       openInspector: (inspectorTarget: string) => set({ inspectorTarget }),
       closeInspector: () => set({ inspectorTarget: null }),
+      askConfirm: (confirmDialog) => set({ confirmDialog }),
+      closeConfirm: () => set({ confirmDialog: null }),
 
       requestFocus: (id: string) => set({ focusRequest: { id, nonce: Date.now() } }),
       setMobileTab: (mobileTab: 'graph' | 'chat') => set({ mobileTab }),

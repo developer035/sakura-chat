@@ -6,7 +6,14 @@ import { Minus, Pin, ScanSearch, X } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import type { TurnNode, WindowState } from '@/lib/types';
 import { getSideThread, sideRootsOf } from '@/lib/tree-utils';
-import { cancelTurn, deleteTurn, editTurn, isBusy, retryTurn, sendTurn } from '@/lib/chat-actions';
+import {
+  cancelTurn,
+  editTurn,
+  isBusy,
+  requestDeleteTurn,
+  retryTurn,
+  sendTurn,
+} from '@/lib/chat-actions';
 import { scrollBehavior } from '@/lib/motion';
 import { ChatInput } from './ChatInput';
 import { MessageTurn } from './MessageTurn';
@@ -205,7 +212,7 @@ function WindowContent({
                 if (id && n.id === win.rootId) setWindowRoot(win.id, id);
               }}
               canEdit={!busy}
-              onDelete={() => deleteTurn(n.id)}
+              onDelete={() => requestDeleteTurn(n.id)}
               sideBranches={sideRootsOf(nodes, n.id).map((r) => ({ id: r.id, title: r.title }))}
               onOpenSide={(rootId) => openWindow({ rootId, anchorId: n.id })}
             />

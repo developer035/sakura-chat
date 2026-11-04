@@ -94,6 +94,24 @@ export function getSideThread(nodes: Nodes, rootId: string | null): TurnNode[] {
   return out;
 }
 
+/** A turn plus everything below it (replies, side branches, later turns). */
+export function collectSubtree(nodes: Nodes, id: string): Set<string> {
+  const out = new Set<string>();
+  if (!nodes[id]) return out;
+  out.add(id);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const n of Object.values(nodes)) {
+      if (n.parentId && out.has(n.parentId) && !out.has(n.id)) {
+        out.add(n.id);
+        grew = true;
+      }
+    }
+  }
+  return out;
+}
+
 /** Id of the first version of a turn (edited siblings point back at it). */
 export function versionOrigin(n: TurnNode): string {
   return n.versionOf ?? n.id;

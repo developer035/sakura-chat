@@ -10,6 +10,7 @@ import { GraphView } from './GraphView';
 import { FloatingWindowManager } from './FloatingWindowManager';
 import { ToastHost } from './Toast';
 import { ContextInspector } from './ContextInspector';
+import { ConfirmDialog } from './ConfirmDialog';
 import { MascotWidget } from './MascotWidget';
 import { Download, Ellipsis, Upload, RotateCcw, Sparkles } from 'lucide-react';
 
@@ -35,6 +36,7 @@ export function AppShell() {
   const exportJSON = useStore((s) => s.exportJSON);
   const importJSON = useStore((s) => s.importJSON);
   const pushToast = useStore((s) => s.pushToast);
+  const askConfirm = useStore((s) => s.askConfirm);
   const hasNodes = useStore((s) => Object.keys(s.nodes).length > 0);
 
   // Check URL params for ?demo=1 and hydrate store
@@ -65,15 +67,27 @@ export function AppShell() {
   }, [menuOpen]);
 
   const handleReset = () => {
-    if (window.confirm('Clear all conversation turns and start fresh?')) reset();
+    const count = Object.keys(useStore.getState().nodes).length;
+    if (count === 0) {
+      reset();
+      return;
+    }
+    askConfirm({
+      title: 'Start fresh?',
+      message: `This clears all ${count} turn${count === 1 ? '' : 's'} and your windows. Export first if you want a backup.`,
+      confirmLabel: 'Clear everything',
+      onConfirm: reset,
+    });
   };
 
   const handleLoadDemo = () => {
-    if (
-      hasNodes &&
-      !demoMode &&
-      !window.confirm('Replace your current tree with the demo? (Export first if you want to keep it.)')
-    ) {
+    if (hasNodes && !demoMode) {
+      askConfirm({
+        title: 'Replace your tree with the demo?',
+        message: 'Your current conversation will be replaced. Export it first if you want to keep it.',
+        confirmLabel: 'Load demo',
+        onConfirm: loadDemo,
+      });
       return;
     }
     loadDemo();
@@ -333,6 +347,7 @@ export function AppShell() {
       <FloatingWindowManager />
       <ContextInspector />
       <ToastHost />
+      <ConfirmDialog />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { buildContext } from './context';
 import { streamChat } from './stream';
 import { CHAT_SYSTEM_PROMPT } from './prompts';
 import { branchSummary, routeMessage, summarize } from './api';
-import { getMainThread, versionOrigin } from './tree-utils';
+import { collectSubtree, getMainThread, versionOrigin } from './tree-utils';
 import type { NodeKind, SearchCitation, TurnNode } from './types';
 
 /** Abort controllers for in-flight streams, keyed by node id. */
@@ -278,22 +278,39 @@ export function cancelTurn(nodeId: string) {
   }
 }
 
+/** Asks for confirmation (showing exactly what will go), then runs deleteTurn. */
+export function requestDeleteTurn(id: string) {
+  const st = get();
+  const node = st.nodes[id];
+  if (!node) return;
+
+  const doomed = collectSubtree(st.nodes, id);
+  const total = doomed.size;
+  const below = total - 1;
+  const streaming = [...doomed].some((nodeId) => isBusy(st.nodes[nodeId]));
+
+  let message =
+    below === 0
+      ? 'Its reply goes with it.'
+      : `This also deletes the ${below} turn${below === 1 ? '' : 's'} that came after it, side branches included.`;
+  if (streaming) message += ' A reply is still being written; it will be stopped.';
+  message += ' You can undo right after.';
+
+  const title = node.title.length > 40 ? `${node.title.slice(0, 40)}...` : node.title;
+  st.askConfirm({
+    title: `Delete \u201c${title}\u201d?`,
+    message,
+    confirmLabel: total === 1 ? 'Delete turn' : `Delete ${total} turns`,
+    onConfirm: () => deleteTurn(id),
+  });
+}
+
 /** Deletes a turn and everything below it, with an Undo toast that restores it exactly. */
 export function deleteTurn(id: string) {
   const st = get();
   if (!st.nodes[id]) return;
 
-  const doomed = new Set<string>([id]);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const n of Object.values(st.nodes)) {
-      if (n.parentId && doomed.has(n.parentId) && !doomed.has(n.id)) {
-        doomed.add(n.id);
-        grew = true;
-      }
-    }
-  }
+  const doomed = collectSubtree(st.nodes, id);
 
   doomed.forEach((nodeId) => {
     if (inflight.has(nodeId)) cancelTurn(nodeId);

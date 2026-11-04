@@ -4,7 +4,14 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/lib/store';
 import { MASCOTS } from '@/lib/constants';
 import { getMainThread, getVersions, sideRootsOf } from '@/lib/tree-utils';
-import { cancelTurn, deleteTurn, editTurn, isBusy, retryTurn, sendMainTurn } from '@/lib/chat-actions';
+import {
+  cancelTurn,
+  editTurn,
+  isBusy,
+  requestDeleteTurn,
+  retryTurn,
+  sendMainTurn,
+} from '@/lib/chat-actions';
 import { scrollBehavior } from '@/lib/motion';
 import { MascotWidget } from './MascotWidget';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -127,7 +134,7 @@ export function ChatPanel() {
               onBranch={() => openWindow({ anchorId: node.id })}
               onEdit={(text) => editTurn(node.id, text)}
               canEdit={!isStreaming}
-              onDelete={() => deleteTurn(node.id)}
+              onDelete={() => requestDeleteTurn(node.id)}
               versions={versionsFor(node.id)}
               sideBranches={sideRootsOf(nodes, node.id).map((r) => ({ id: r.id, title: r.title }))}
               onOpenSide={openSide}

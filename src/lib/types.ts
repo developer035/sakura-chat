@@ -57,6 +57,14 @@ export interface Toast {
   onAction?: () => void;
 }
 
+export interface ConfirmRequest {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+}
+
 export interface AppStore {
   // State
   nodes: Record<string, TurnNode>;
@@ -71,6 +79,7 @@ export interface AppStore {
   autoRoute: boolean;
   toasts: Toast[];
   inspectorTarget: string | null;
+  confirmDialog: ConfirmRequest | null;
 
   // UI actions
   setAutoRoute: (enabled: boolean) => void;
@@ -78,6 +87,8 @@ export interface AppStore {
   dismissToast: (id: string) => void;
   openInspector: (nodeId: string) => void;
   closeInspector: () => void;
+  askConfirm: (req: ConfirmRequest) => void;
+  closeConfirm: () => void;
   requestFocus: (id: string) => void;
   setMobileTab: (tab: 'graph' | 'chat') => void;
 

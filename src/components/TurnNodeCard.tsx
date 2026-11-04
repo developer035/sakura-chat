@@ -3,7 +3,7 @@
 import React, { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { AlertCircle, Check, GitFork, Loader2, Pin, Trash2 } from 'lucide-react';
-import { deleteTurn } from '@/lib/chat-actions';
+import { requestDeleteTurn } from '@/lib/chat-actions';
 import { useStore } from '@/lib/store';
 import type { TurnFlowNode } from '@/lib/graph-layout';
 
@@ -65,7 +65,7 @@ function TurnNodeCardInner({ data }: NodeProps<TurnFlowNode>) {
             className="nodrag nopan p-0.5 rounded-full text-[var(--ink-light)] hover:text-red-600 hover:bg-red-50 opacity-50 group-hover:opacity-100 transition-opacity"
             onClick={(e) => {
               e.stopPropagation();
-              deleteTurn(data.id);
+              requestDeleteTurn(data.id);
             }}
             title="Delete this turn and everything below it"
           >
