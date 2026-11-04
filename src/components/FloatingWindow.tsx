@@ -16,6 +16,7 @@ import {
 } from '@/lib/chat-actions';
 import { scrollBehavior } from '@/lib/motion';
 import { ChatInput } from './ChatInput';
+import type { Attachment, ToolMode } from '@/lib/types';
 import { MessageTurn } from './MessageTurn';
 
 /** First sentence of the branch's last finished reply, stripped of markdown, max 140 chars. */
@@ -133,12 +134,12 @@ function WindowContent({
     endRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'end' });
   }, [leaf?.id, leaf?.assistant]);
 
-  const handleSend = (text: string) => {
+  const handleSend = (text: string, attachments?: Attachment[], tool?: ToolMode) => {
     if (!win.rootId) {
-      const id = sendTurn({ parentId: win.anchorId, text, kind: 'side', branchRoot: true });
+      const id = sendTurn({ parentId: win.anchorId, text, kind: 'side', branchRoot: true, attachments, tool });
       if (id) setWindowRoot(win.id, id);
     } else if (leaf) {
-      sendTurn({ parentId: leaf.id, text, kind: 'side' });
+      sendTurn({ parentId: leaf.id, text, kind: 'side', attachments, tool });
     }
   };
 

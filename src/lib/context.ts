@@ -11,6 +11,19 @@ export function estimateTokens(s: string): number {
   return Math.ceil(s.length / 4);
 }
 
+/** Approximate token cost of one image part. */
+export const IMAGE_TOKENS = 765;
+
+/** Tokens a turn's attachments add to a request (images ~765 each, documents by text size). */
+export function attachmentTokens(n: TurnNode): number {
+  let t = 0;
+  for (const a of n.attachments ?? []) {
+    if (a.kind === 'image') t += IMAGE_TOKENS;
+    else t += (a.textTokens ?? 0) + (a.pageImageKeys?.length ?? 0) * IMAGE_TOKENS;
+  }
+  return t;
+}
+
 export type ContextMode = 'full' | 'summary' | 'excluded';
 
 export interface ContextEntry {
@@ -50,7 +63,8 @@ export function planContext(
     curr = curr.parentId ? nodes[curr.parentId] : undefined;
   }
 
-  const fullCost = (n: TurnNode) => estimateTokens(n.user) + estimateTokens(n.assistant);
+  const fullCost = (n: TurnNode) =>
+    estimateTokens(n.user) + estimateTokens(n.assistant) + attachmentTokens(n);
   const usable = path.filter((n) => !n.excluded);
   let total = usable.reduce((s, n) => s + fullCost(n), 0);
 

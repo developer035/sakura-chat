@@ -4,7 +4,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { Pin, X } from 'lucide-react';
 import { useStore } from '@/lib/store';
-import { planContext, type ContextMode } from '@/lib/context';
+import { IMAGE_TOKENS, planContext, type ContextMode } from '@/lib/context';
 
 const MODE_LABEL: Record<ContextMode, string> = {
   full: 'Full',
@@ -108,12 +108,23 @@ export function ContextInspector() {
                 </button>
               </div>
 
-              <div className="mt-1.5 flex items-center gap-1.5">
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <span
                   className={`text-[10px] font-heading font-bold px-2 py-0.5 rounded-full border border-[var(--ink)] text-[var(--ink)] ${MODE_STYLE[mode]}`}
                 >
                   {MODE_LABEL[mode]}
                 </span>
+                {mode === 'full' &&
+                  (node.attachments ?? []).map((a) => (
+                    <span
+                      key={a.id}
+                      className="text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full border border-[var(--ink)]/40 bg-white text-[var(--ink)] max-w-[180px] truncate"
+                      title={a.name}
+                    >
+                      {a.kind === 'image' ? '🖼️' : '📄'} {a.name} ·{' '}
+                      {a.kind === 'image' ? IMAGE_TOKENS : (a.textTokens ?? 0)} tok
+                    </span>
+                  ))}
               </div>
 
               <p className="mt-1.5 text-xs text-[var(--ink-light)] leading-snug line-clamp-3">

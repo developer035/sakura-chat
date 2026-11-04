@@ -60,6 +60,9 @@ function TurnNodeCardInner({ data }: NodeProps<TurnFlowNode>) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           {data.hasPin ? <Pin className="w-3 h-3 text-[var(--ink)]" /> : null}
+          {data.files > 0 ? <span title="Has attachments" className="text-[11px]">📎{data.files}</span> : null}
+          {data.images > 0 ? <span title="Generated image" className="text-[11px]">🖼️</span> : null}
+          {data.doc ? <span title="Document" className="text-[11px]">📄</span> : null}
           <button
             type="button"
             className="nodrag nopan p-0.5 rounded-full text-[var(--ink-light)] hover:text-red-600 hover:bg-red-50 opacity-50 group-hover:opacity-100 transition-opacity"

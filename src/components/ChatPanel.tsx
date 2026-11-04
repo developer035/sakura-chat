@@ -16,6 +16,7 @@ import { scrollBehavior } from '@/lib/motion';
 import { MascotWidget } from './MascotWidget';
 import { Breadcrumbs } from './Breadcrumbs';
 import { ChatInput } from './ChatInput';
+import type { Attachment, ToolMode } from '@/lib/types';
 import { EmptyChatState, MessageTurn } from './MessageTurn';
 import { ArrowDown, Globe, ScanSearch } from 'lucide-react';
 
@@ -78,8 +79,8 @@ export function ChatPanel() {
     if (isStreaming) messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
   }, [activeNode?.assistant, isStreaming]);
 
-  const handleSendMessage = (text: string) => {
-    sendMainTurn(text);
+  const handleSendMessage = (text: string, attachments?: Attachment[], tool?: ToolMode) => {
+    sendMainTurn(text, attachments, tool);
     requestAnimationFrame(scrollToBottom);
   };
 

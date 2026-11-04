@@ -1,10 +1,10 @@
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import { STREAM_TIMEOUT_MS } from './constants';
-import type { ChatMessage } from './context';
+import type { RequestMessage } from './request';
 import type { SearchCitation } from './types';
 
 export interface StreamChatPayload {
-  messages: ChatMessage[];
+  messages: RequestMessage[];
   system?: string;
   webSearch?: boolean;
 }

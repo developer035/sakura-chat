@@ -12,6 +12,7 @@ import { ToastHost } from './Toast';
 import { ContextInspector } from './ContextInspector';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MascotWidget } from './MascotWidget';
+import { setFileStoreFallbackHandler } from '@/lib/file-store';
 import { Download, Ellipsis, Upload, RotateCcw, Sparkles } from 'lucide-react';
 
 export function AppShell() {
@@ -38,6 +39,15 @@ export function AppShell() {
   const pushToast = useStore((s) => s.pushToast);
   const askConfirm = useStore((s) => s.askConfirm);
   const hasNodes = useStore((s) => Object.keys(s.nodes).length > 0);
+
+  // One-time heads-up if the browser blocks IndexedDB (files then live in memory only).
+  useEffect(() => {
+    setFileStoreFallbackHandler(() =>
+      useStore.getState().pushToast({
+        message: '🍵 This browser blocks file storage, so attachments will be lost on refresh.',
+      })
+    );
+  }, []);
 
   // Check URL params for ?demo=1 and hydrate store
   useEffect(() => {

@@ -19,6 +19,27 @@ export interface SearchCitation {
   title?: string;
 }
 
+export type AttachmentKind = 'image' | 'pdf' | 'docx' | 'text';
+export type ToolMode = 'image' | 'document';
+export type ImageSize = '1024x1024' | '1536x1024' | '1024x1536';
+
+export interface Attachment {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  kind: AttachmentKind;
+  blobKey: string; // IndexedDB key: image bytes / original file / generated image
+  textKey?: string; // IndexedDB key: extracted text (documents)
+  textTokens?: number; // estimate, used by planContext and the inspector
+  truncated?: boolean;
+  pages?: number;
+  width?: number;
+  height?: number;
+  pageImageKeys?: string[]; // scanned PDFs: rendered page JPEGs
+  thumb?: string; // tiny JPEG data URL
+}
+
 export interface TurnNode {
   id: string;
   parentId: string | null;
@@ -36,6 +57,10 @@ export interface TurnNode {
   webSearchEnabled?: boolean;
   branchRoot?: boolean; // first node of a branch created via "Branch"
   versionOf?: string; // id of the first version, when this turn is an edited sibling
+  attachments?: Attachment[]; // user uploads for this turn
+  outputs?: Attachment[]; // generated images
+  tool?: ToolMode;
+  imageSize?: ImageSize;
 }
 
 export interface WindowState {

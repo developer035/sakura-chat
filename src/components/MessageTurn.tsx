@@ -7,6 +7,7 @@ import { useStore } from '@/lib/store';
 import type { TurnNode } from '@/lib/types';
 import { MASCOTS } from '@/lib/constants';
 import { MascotWidget } from './MascotWidget';
+import { AttachmentStrip } from './AttachmentStrip';
 import {
   ChevronLeft,
   ChevronRight,
@@ -173,9 +174,14 @@ export function MessageTurn({
               </div>
             </div>
           ) : (
+            <>
+              {node.attachments && node.attachments.length > 0 && (
+                <AttachmentStrip items={node.attachments} />
+              )}
             <div className="sticker-static bg-[var(--butter)] text-[var(--ink)] px-4 py-3 border-[var(--border-w)] border-[var(--ink)] font-body text-sm md:text-base shadow-[0_3px_0_var(--ink)]">
               <p className="whitespace-pre-wrap">{node.user}</p>
             </div>
+            </>
           )}
 
           {!editing && (versions || onEdit) && (

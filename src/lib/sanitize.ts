@@ -1,4 +1,4 @@
-import type { NodeStatus, SearchCitation, TurnNode, WindowState } from './types';
+import type { Attachment, NodeStatus, SearchCitation, TurnNode, WindowState } from './types';
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -24,6 +24,44 @@ export function sanitizeStatus(status: unknown): NodeStatus {
     default:
       return 'done';
   }
+}
+
+const KINDS = ['image', 'pdf', 'docx', 'text'];
+
+function sanitizeAttachments(raw: unknown): Attachment[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: Attachment[] = [];
+  for (const a of raw.slice(0, 12)) {
+    if (!isObj(a)) continue;
+    const id = str(a.id);
+    const name = str(a.name);
+    const blobKey = str(a.blobKey);
+    const kind = str(a.kind);
+    if (!id || !name || !blobKey || !kind || !KINDS.includes(kind)) continue;
+    const att: Attachment = {
+      id,
+      name: name.slice(0, 200),
+      mime: str(a.mime) ?? 'application/octet-stream',
+      size: num(a.size) ?? 0,
+      kind: kind as Attachment['kind'],
+      blobKey,
+    };
+    const textKey = str(a.textKey);
+    if (textKey) att.textKey = textKey;
+    const [tt, pages, width, height] = [num(a.textTokens), num(a.pages), num(a.width), num(a.height)];
+    if (tt !== undefined) att.textTokens = tt;
+    if (pages !== undefined) att.pages = pages;
+    if (width !== undefined) att.width = width;
+    if (height !== undefined) att.height = height;
+    if (a.truncated === true) att.truncated = true;
+    if (Array.isArray(a.pageImageKeys)) {
+      att.pageImageKeys = a.pageImageKeys.filter((k): k is string => typeof k === 'string').slice(0, 8);
+    }
+    const thumb = str(a.thumb);
+    if (thumb && thumb.startsWith('data:image/') && thumb.length < 40_000) att.thumb = thumb;
+    out.push(att);
+  }
+  return out;
 }
 
 function sanitizeNode(key: string, v: unknown): TurnNode | null {
@@ -52,6 +90,14 @@ function sanitizeNode(key: string, v: unknown): TurnNode | null {
   if (typeof v.branchRoot === 'boolean') node.branchRoot = v.branchRoot;
   const versionOf = str(v.versionOf);
   if (versionOf) node.versionOf = versionOf;
+  const attachments = sanitizeAttachments(v.attachments);
+  if (attachments?.length) node.attachments = attachments;
+  const outputs = sanitizeAttachments(v.outputs);
+  if (outputs?.length) node.outputs = outputs;
+  if (v.tool === 'image' || v.tool === 'document') node.tool = v.tool;
+  if (v.imageSize === '1024x1024' || v.imageSize === '1536x1024' || v.imageSize === '1024x1536') {
+    node.imageSize = v.imageSize;
+  }
   if (Array.isArray(v.searchQueries)) {
     node.searchQueries = v.searchQueries.filter((q): q is string => typeof q === 'string');
   }

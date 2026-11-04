@@ -1,11 +1,11 @@
 import { nanoid } from 'nanoid';
 import { useStore } from './store';
-import { buildContext } from './context';
+import { buildRequestMessages } from './request';
 import { streamChat } from './stream';
 import { CHAT_SYSTEM_PROMPT } from './prompts';
 import { branchSummary, routeMessage, summarize } from './api';
 import { collectSubtree, getMainThread, versionOrigin } from './tree-utils';
-import type { NodeKind, SearchCitation, TurnNode } from './types';
+import type { Attachment, NodeKind, SearchCitation, ToolMode, TurnNode } from './types';
 
 /** Abort controllers for in-flight streams, keyed by node id. */
 const inflight = new Map<string, AbortController>();
@@ -64,8 +64,6 @@ function runStream(nodeId: string) {
   const node = get().nodes[nodeId];
   if (!node) return;
 
-  const history = buildContext(get().nodes, node.parentId);
-  const messages = [...history, { role: 'user' as const, content: node.user }];
   const controller = new AbortController();
   inflight.get(nodeId)?.abort();
   inflight.set(nodeId, controller);
@@ -78,8 +76,25 @@ function runStream(nodeId: string) {
     if (isCurrent()) inflight.delete(nodeId);
   };
 
-  void streamChat(
-    { messages, system: CHAT_SYSTEM_PROMPT, webSearch: node.webSearchEnabled },
+  void (async () => {
+    let messages;
+    try {
+      messages = await buildRequestMessages(get().nodes, node);
+    } catch (err) {
+      if (!isCurrent()) return;
+      finish();
+      get().updateNode(nodeId, {
+        status: 'error',
+        assistant: `*(Could not prepare your attachments: ${err instanceof Error ? err.message : 'unknown error'}. Please retry.)*`,
+      });
+      get().setMascotState('error');
+      return;
+    }
+    if (!isCurrent()) return;
+    // Attachments force a plain (non-search) request: the web-search path is text only.
+    const hasFiles = !!node.attachments?.length;
+    void streamChat(
+    { messages, system: CHAT_SYSTEM_PROMPT, webSearch: node.webSearchEnabled && !hasFiles },
     {
       signal: controller.signal,
       onToken: (accumulated) => {
@@ -127,7 +142,8 @@ function runStream(nodeId: string) {
         get().setMascotState('error');
       },
     }
-  );
+    );
+  })();
 }
 
 /**
@@ -140,6 +156,8 @@ export function sendTurn(opts: {
   kind: NodeKind;
   branchRoot?: boolean;
   versionOf?: string;
+  attachments?: Attachment[];
+  tool?: ToolMode;
 }): string | null {
   if (!takeMessageSlot()) return null;
 
@@ -158,6 +176,8 @@ export function sendTurn(opts: {
     citations: [],
     ...(opts.branchRoot ? { branchRoot: true } : {}),
     ...(opts.versionOf ? { versionOf: opts.versionOf } : {}),
+    ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
+    ...(opts.tool ? { tool: opts.tool } : {}),
   };
   // Side turns must not move the main panel.
   get().addNode(node, opts.kind === 'main');
@@ -170,14 +190,15 @@ export function sendTurn(opts: {
  * in parallel the router decides whether the message is a tangent (moves to a
  * side window) or an unrelated topic (starts a new tree). Both are undoable.
  */
-export function sendMainTurn(text: string): string | null {
+export function sendMainTurn(text: string, attachments?: Attachment[], tool?: ToolMode): string | null {
   const thread = getMainThread(get().nodes, get().activeId);
   const parentId = thread.length ? thread[thread.length - 1].id : null;
-  const id = sendTurn({ parentId, text, kind: 'main' });
+  const id = sendTurn({ parentId, text, kind: 'main', attachments, tool });
   if (!id) return null;
 
   // Never route the first two messages of a tree.
-  if (!get().autoRoute || !parentId || thread.length < 2) return id;
+  // Turns with files or a tool never auto-route (they need to stay where the user put them).
+  if (!get().autoRoute || !parentId || thread.length < 2 || attachments?.length || tool) return id;
 
   void (async () => {
     const result = await routeMessage(branchSummary(thread), text);
@@ -242,6 +263,8 @@ export function editTurn(nodeId: string, text: string): string | null {
     kind: n.kind,
     branchRoot: n.branchRoot,
     versionOf: versionOrigin(n),
+    attachments: n.attachments,
+    tool: n.tool,
   });
 }
 

@@ -29,8 +29,9 @@ export async function POST(req: Request) {
     );
   }
 
+  type Part = { type?: string; text?: string; image_url?: { url?: string } };
   let body: {
-    messages?: Array<{ role: string; content: string }>;
+    messages?: Array<{ role: string; content: string | Part[] }>;
     system?: string;
     webSearch?: boolean;
   };
@@ -44,16 +45,46 @@ export async function POST(req: Request) {
   const { messages = [], system = CHAT_SYSTEM_PROMPT, webSearch = false } = body;
 
   // Abuse protection: payload caps (the app's own context budget stays well below these).
-  const totalChars = messages.reduce((n, m) => n + String(m?.content ?? '').length, 0);
-  if (
-    !Array.isArray(messages) ||
-    messages.length > 200 ||
-    messages.some((m) => String(m?.content ?? '').length > 40_000) ||
-    totalChars > 250_000 ||
-    String(system).length > 4_000
-  ) {
+  // Message content is a string or OpenAI-style parts (text + image_url data URLs).
+  const MAX_IMAGES = 6;
+  const MAX_IMAGE_URL_CHARS = 1_500_000;
+  const MAX_TEXT_CHARS = 250_000;
+  let imageCount = 0;
+  let totalChars = 0;
+  let badShape = false;
+  let tooBig = !Array.isArray(messages) || messages.length > 200 || String(system).length > 4_000;
+  if (!tooBig) {
+    for (const m of messages) {
+      const c = m?.content;
+      if (typeof c === 'string') {
+        totalChars += c.length;
+        if (c.length > 200_000) tooBig = true;
+      } else if (Array.isArray(c)) {
+        for (const p of c) {
+          if (p?.type === 'text' && typeof p.text === 'string') {
+            totalChars += p.text.length;
+            if (p.text.length > 200_000) tooBig = true;
+          } else if (p?.type === 'image_url' && typeof p.image_url?.url === 'string') {
+            imageCount += 1;
+            if (!p.image_url.url.startsWith('data:image/')) badShape = true;
+            if (p.image_url.url.length > MAX_IMAGE_URL_CHARS) tooBig = true;
+          } else {
+            badShape = true;
+          }
+        }
+      } else {
+        badShape = true;
+      }
+    }
+  }
+  if (badShape) return Response.json({ error: 'Invalid message content.' }, { status: 400 });
+  if (tooBig || imageCount > MAX_IMAGES || totalChars > MAX_TEXT_CHARS) {
     return Response.json({ error: 'Request too large.' }, { status: 413 });
   }
+  const contentToText = (c: string | Part[]): string =>
+    typeof c === 'string'
+      ? c
+      : c.map((p) => (p.type === 'text' ? (p.text ?? '') : '[image]')).join('\n');
 
   try {
     // Mode 1: Search Grounding via Meta Responses API
@@ -63,7 +94,7 @@ export async function POST(req: Request) {
         inputText += `[Instructions: ${system}]\n\n`;
       }
       for (const m of messages) {
-        inputText += `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}\n\n`;
+        inputText += `${m.role === 'user' ? 'User' : 'Assistant'}: ${contentToText(m.content)}\n\n`;
       }
       inputText = inputText.trim();
 

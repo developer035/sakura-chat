@@ -15,6 +15,9 @@ export interface GraphItem extends Record<string, unknown> {
   preview: string;
   status: NodeStatus;
   hasPin: boolean;
+  files: number; // uploaded attachments
+  images: number; // generated images
+  doc: boolean; // document-tool turn
   excluded: boolean;
   web: boolean;
   onPath: boolean;
@@ -42,6 +45,9 @@ export function graphSignature(
       preview: n.user.slice(0, 70),
       status: n.status,
       hasPin: !!n.pin,
+      files: n.attachments?.length ?? 0,
+      images: n.outputs?.length ?? 0,
+      doc: n.tool === 'document',
       excluded: !!n.excluded,
       web: !!n.webSearchEnabled,
       onPath: onPath.has(n.id),
