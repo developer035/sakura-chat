@@ -1,5 +1,8 @@
-import { META_IMAGES_URL, META_IMAGE_EDITS_URL, META_MODEL_IMAGE } from '@/lib/constants';
 import { rateLimit } from '@/lib/rate-limit';
+
+const META_MODEL_IMAGE = 'muse-image-1.0';
+const META_IMAGES_URL = 'https://api.meta.ai/v1/images/generations';
+const META_IMAGE_EDITS_URL = 'https://api.meta.ai/v1/images/edits';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -124,9 +127,12 @@ export async function POST(req: Request) {
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
   } catch (err) {
+    console.error('[api/image] failed:', err);
     const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+    const detail =
+      process.env.NODE_ENV !== 'production' && err instanceof Error ? ` (${err.message})` : '';
     return Response.json(
-      { error: timedOut ? 'Image generation timed out. Please try again.' : 'Image generation failed.' },
+      { error: (timedOut ? 'Image generation timed out. Please try again.' : 'Image generation failed.') + detail },
       { status: timedOut ? 504 : 500 }
     );
   }
