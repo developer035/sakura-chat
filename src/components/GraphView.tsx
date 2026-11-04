@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -33,14 +33,28 @@ function GraphInner() {
   const requestFocus = useStore((s) => s.requestFocus);
   const setMobileTab = useStore((s) => s.setMobileTab);
   const openWindow = useStore((s) => s.openWindow);
-  const { fitView, setCenter, getZoom } = useReactFlow();
+  const { fitView, setCenter, getZoom, setViewport } = useReactFlow();
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Animated viewport moves compute log(w1/w0) in d3, which is NaN when the pane has
+  // zero size (it is display:none while the Chat tab is active on mobile). Only animate
+  // when the pane is actually visible, and recover if the zoom ever goes non-finite.
+  const paneVisible = () => {
+    const el = wrapRef.current;
+    return !!el && el.offsetWidth > 0 && el.offsetHeight > 0;
+  };
 
   const { nodes, edges } = useMemo(() => computeLayout(JSON.parse(sig) as GraphItem[]), [sig]);
 
   // Refit when the number of nodes changes or the graph tab becomes visible.
   useEffect(() => {
-    const r = requestAnimationFrame(() => fitView({ padding: 0.2, duration: 400 }));
+    const r = requestAnimationFrame(() => {
+      if (!paneVisible()) return;
+      if (!Number.isFinite(getZoom())) setViewport({ x: 0, y: 0, zoom: 1 });
+      fitView({ padding: 0.2, duration: 400 });
+    });
     return () => cancelAnimationFrame(r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes.length, mobileTab, fitView]);
 
   // Center on the requested node.
@@ -48,19 +62,21 @@ function GraphInner() {
     if (!focusRequest) return;
     const target = nodes.find((n) => n.id === focusRequest.id);
     if (!target) return;
-    const r = requestAnimationFrame(() =>
+    const r = requestAnimationFrame(() => {
+      if (!paneVisible()) return;
+      const zoom = getZoom();
       setCenter(target.position.x + NODE_WIDTH / 2, target.position.y + NODE_HEIGHT / 2, {
-        zoom: Math.max(getZoom(), 0.8),
+        zoom: Number.isFinite(zoom) ? Math.max(zoom, 0.8) : 1,
         duration: 400,
-      })
-    );
+      });
+    });
     return () => cancelAnimationFrame(r);
     // Only react to new focus requests, not layout changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusRequest]);
 
   return (
-    <div className="relative h-full w-full">
+    <div ref={wrapRef} className="relative h-full w-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
