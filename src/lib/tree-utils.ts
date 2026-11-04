@@ -1,73 +1,100 @@
 import type { TurnNode } from './types';
 
-/**
- * Finds the leaf node of a branch given any start node ID.
- * Follows children down along the main path (or newest child) until a leaf is reached.
- */
-export function findBranchLeaf(
-  nodes: Record<string, TurnNode>,
-  startId: string | null
-): string | null {
-  if (!startId || !nodes[startId]) {
-    return null;
+type Nodes = Record<string, TurnNode>;
+
+function childrenOf(nodes: Nodes, id: string): TurnNode[] {
+  return Object.values(nodes)
+    .filter((n) => n.parentId === id)
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** A side root is the first node of a side branch. */
+export function isSideRoot(nodes: Nodes, n: TurnNode): boolean {
+  if (n.kind !== 'side') return false;
+  if (n.branchRoot) return true;
+  const parent = n.parentId ? nodes[n.parentId] : undefined;
+  return !parent || parent.kind !== 'side';
+}
+
+/** Walks up from a side node to the root of its side branch. */
+export function findSideRoot(nodes: Nodes, id: string): string | null {
+  let curr: TurnNode | undefined = nodes[id];
+  if (!curr || curr.kind !== 'side') return null;
+  while (curr && !isSideRoot(nodes, curr)) {
+    curr = curr.parentId ? nodes[curr.parentId] : undefined;
   }
+  return curr ? curr.id : null;
+}
+
+/**
+ * Finds the leaf of the branch containing startId.
+ * Main nodes follow their main child; side nodes follow their newest
+ * continuation (side child that is not the root of another branch).
+ */
+export function findBranchLeaf(nodes: Nodes, startId: string | null): string | null {
+  if (!startId || !nodes[startId]) return null;
 
   let currId = startId;
   const visited = new Set<string>([currId]);
 
   while (true) {
-    const currNode = nodes[currId];
-    if (!currNode) break;
-
-    // Find direct children
-    const children = Object.values(nodes).filter(
-      (n) => n.parentId === currId && !visited.has(n.id)
-    );
-
-    if (children.length === 0) {
-      break;
-    }
-
-    // If current is main branch, look for a main child first
-    const mainChild = children.find((c) => c.kind === 'main');
-    if (currNode.kind === 'main') {
-      if (mainChild) {
-        currId = mainChild.id;
-        visited.add(currId);
-        continue;
-      }
-      // If no main child exists, the main branch stops here
-      break;
-    }
-
-    // For side branches, follow newest child
-    const nextChild = children[children.length - 1];
-    currId = nextChild.id;
+    const curr = nodes[currId];
+    const kids = childrenOf(nodes, currId).filter((c) => !visited.has(c.id));
+    const next =
+      curr.kind === 'main'
+        ? kids.find((c) => c.kind === 'main')
+        : [...kids].reverse().find((c) => c.kind === 'side' && !c.branchRoot);
+    if (!next) break;
+    currId = next.id;
     visited.add(currId);
   }
 
   return currId;
 }
 
-/**
- * Computes the full path from root down to the leaf of the active branch.
- */
-export function getBranchPath(
-  nodes: Record<string, TurnNode>,
-  targetId: string | null
-): TurnNode[] {
-  if (!targetId || !nodes[targetId]) {
-    return [];
-  }
+/** Full path from the tree root down to the leaf of the branch containing targetId. */
+export function getBranchPath(nodes: Nodes, targetId: string | null): TurnNode[] {
+  if (!targetId || !nodes[targetId]) return [];
 
   const leafId = findBranchLeaf(nodes, targetId) || targetId;
   const path: TurnNode[] = [];
   let curr: TurnNode | undefined = nodes[leafId];
-
   while (curr) {
     path.unshift(curr);
     curr = curr.parentId ? nodes[curr.parentId] : undefined;
   }
-
   return path;
+}
+
+/** Nearest main ancestor (or self) of a node. */
+export function nearestMainId(nodes: Nodes, id: string | null): string | null {
+  let curr: TurnNode | undefined = id ? nodes[id] : undefined;
+  while (curr && curr.kind !== 'main') {
+    curr = curr.parentId ? nodes[curr.parentId] : undefined;
+  }
+  return curr ? curr.id : null;
+}
+
+/** Main-thread path (root to main leaf) for whatever node is active. */
+export function getMainThread(nodes: Nodes, activeId: string | null): TurnNode[] {
+  return getBranchPath(nodes, nearestMainId(nodes, activeId));
+}
+
+/** Nodes of one side branch only: from its root down to its leaf. */
+export function getSideThread(nodes: Nodes, rootId: string | null): TurnNode[] {
+  if (!rootId || !nodes[rootId]) return [];
+  const leafId = findBranchLeaf(nodes, rootId) || rootId;
+  const out: TurnNode[] = [];
+  let curr: TurnNode | undefined = nodes[leafId];
+  while (curr) {
+    out.unshift(curr);
+    if (curr.id === rootId) break;
+    curr = curr.parentId ? nodes[curr.parentId] : undefined;
+  }
+  return out;
+}
+
+/** Side-branch roots hanging directly off a node. */
+export function sideRootsOf(nodes: Nodes, parentId: string): TurnNode[] {
+  return childrenOf(nodes, parentId).filter((c) => isSideRoot(nodes, c));
 }

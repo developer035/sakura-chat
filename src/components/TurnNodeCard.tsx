@@ -8,9 +8,7 @@ import type { TurnFlowNode } from '@/lib/graph-layout';
 
 function TurnNodeCardInner({ data }: NodeProps<TurnFlowNode>) {
   const setActive = useStore((s) => s.setActive);
-  const setBranchFrom = useStore((s) => s.setBranchFrom);
-  const requestFocus = useStore((s) => s.requestFocus);
-  const setMobileTab = useStore((s) => s.setMobileTab);
+  const openWindow = useStore((s) => s.openWindow);
 
   const isSide = data.kind === 'side';
   const busy =
@@ -61,10 +59,9 @@ function TurnNodeCardInner({ data }: NodeProps<TurnFlowNode>) {
           className="nodrag nopan inline-flex items-center gap-1 text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full border border-[var(--ink)] bg-[var(--cream)] hover:bg-[var(--lavender)] text-[var(--ink)] opacity-70 group-hover:opacity-100 transition-opacity"
           onClick={(e) => {
             e.stopPropagation();
-            setBranchFrom(data.id);
-            setActive(data.id);
-            requestFocus(data.id);
-            setMobileTab('chat');
+            // Main nodes stay active; branching opens a draft side window.
+            if (data.kind === 'main') setActive(data.id);
+            openWindow({ anchorId: data.id });
           }}
           title="Ask a side question from here"
         >

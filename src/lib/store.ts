@@ -13,18 +13,16 @@ export const useStore = create<AppStore>()(
       currentMascot: 'mochi',
       mascotState: 'idle',
       webSearchEnabled: false,
-      branchFromId: null,
       focusRequest: null,
       mobileTab: 'chat',
 
-      setBranchFrom: (id: string | null) => set({ branchFromId: id }),
       requestFocus: (id: string) => set({ focusRequest: { id, nonce: Date.now() } }),
       setMobileTab: (mobileTab: 'graph' | 'chat') => set({ mobileTab }),
 
-      addNode: (node: TurnNode) => {
+      addNode: (node: TurnNode, activate = true) => {
         set((state) => ({
           nodes: { ...state.nodes, [node.id]: node },
-          activeId: node.id,
+          activeId: activate ? node.id : state.activeId,
         }));
       },
 
@@ -76,14 +74,14 @@ export const useStore = create<AppStore>()(
           }
 
           // Filter out closed windows
-          const newWindows = state.windows.filter((w) => !toDelete.has(w.nodeId));
+          const newWindows = state.windows.filter(
+            (w) => !toDelete.has(w.anchorId) && !(w.rootId && toDelete.has(w.rootId))
+          );
 
           return {
             nodes: allNodes,
             activeId: newActiveId,
             windows: newWindows,
-            branchFromId:
-              state.branchFromId && toDelete.has(state.branchFromId) ? null : state.branchFromId,
           };
         });
       },
@@ -104,10 +102,10 @@ export const useStore = create<AppStore>()(
         set({ webSearchEnabled });
       },
 
-      openWindow: (nodeId: string) => {
+      openWindow: ({ rootId = null, anchorId }) => {
         set((state) => {
-          // If window for this node already exists, bring it to front
-          const existing = state.windows.find((w) => w.nodeId === nodeId);
+          // If a window for this branch already exists, bring it to front
+          const existing = rootId ? state.windows.find((w) => w.rootId === rootId) : undefined;
           if (existing) {
             const maxZ = Math.max(10, ...state.windows.map((w) => w.z));
             return {
@@ -129,7 +127,8 @@ export const useStore = create<AppStore>()(
 
           const newWindow: WindowState = {
             id: `win-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            nodeId,
+            rootId,
+            anchorId,
             x: 80 + offset,
             y: 80 + offset,
             w: 420,
@@ -140,6 +139,23 @@ export const useStore = create<AppStore>()(
 
           return {
             windows: [...currentList, newWindow],
+          };
+        });
+      },
+
+      setWindowRoot: (id: string, rootId: string) => {
+        set((state) => ({
+          windows: state.windows.map((w) => (w.id === id ? { ...w, rootId } : w)),
+        }));
+      },
+
+      minimizeWindow: (id: string, minimized: boolean) => {
+        set((state) => {
+          const maxZ = Math.max(10, ...state.windows.map((w) => w.z));
+          return {
+            windows: state.windows.map((w) =>
+              w.id === id ? { ...w, minimized, z: minimized ? w.z : maxZ + 1 } : w
+            ),
           };
         });
       },
@@ -189,7 +205,6 @@ export const useStore = create<AppStore>()(
             currentMascot: parsed.currentMascot || 'mochi',
             windows: [],
             demoMode: false,
-            branchFromId: null,
             focusRequest: null,
           });
           return true;
@@ -205,7 +220,6 @@ export const useStore = create<AppStore>()(
           windows: [],
           demoMode: false,
           mascotState: 'idle',
-          branchFromId: null,
           focusRequest: null,
         });
       },
@@ -217,7 +231,6 @@ export const useStore = create<AppStore>()(
           windows: [],
           demoMode: true,
           mascotState: 'success',
-          branchFromId: null,
           focusRequest: null,
         });
       },
@@ -234,6 +247,7 @@ export const useStore = create<AppStore>()(
         activeId: state.activeId,
         currentMascot: state.currentMascot,
         demoMode: state.demoMode,
+        windows: state.windows,
       }),
     }
   )

@@ -34,11 +34,13 @@ export interface TurnNode {
   searchQueries?: string[];
   citations?: SearchCitation[];
   webSearchEnabled?: boolean;
+  branchRoot?: boolean; // first node of a branch created via "Branch"
 }
 
 export interface WindowState {
   id: string;
-  nodeId: string;
+  rootId: string | null; // side-branch root; null = draft (nothing sent yet)
+  anchorId: string; // node this branch hangs off
   x: number;
   y: number;
   w: number;
@@ -56,17 +58,15 @@ export interface AppStore {
   currentMascot: MascotName;
   mascotState: MascotState;
   webSearchEnabled: boolean;
-  branchFromId: string | null;
   focusRequest: { id: string; nonce: number } | null;
   mobileTab: 'graph' | 'chat';
 
   // UI actions
-  setBranchFrom: (id: string | null) => void;
   requestFocus: (id: string) => void;
   setMobileTab: (tab: 'graph' | 'chat') => void;
 
   // Node actions
-  addNode: (node: TurnNode) => void;
+  addNode: (node: TurnNode, activate?: boolean) => void;
   updateNode: (id: string, patch: Partial<TurnNode>) => void;
   deleteSubtree: (id: string) => void;
   setActive: (id: string | null) => void;
@@ -77,7 +77,9 @@ export interface AppStore {
   setWebSearchEnabled: (enabled: boolean) => void;
 
   // Window actions
-  openWindow: (nodeId: string) => void;
+  openWindow: (opts: { rootId?: string | null; anchorId: string }) => void;
+  setWindowRoot: (id: string, rootId: string) => void;
+  minimizeWindow: (id: string, minimized: boolean) => void;
   closeWindow: (id: string) => void;
   updateWindow: (id: string, patch: Partial<WindowState>) => void;
   bringToFront: (id: string) => void;

@@ -20,6 +20,7 @@ import {
   type GraphItem,
 } from '@/lib/graph-layout';
 import { TurnNodeCard } from './TurnNodeCard';
+import { findSideRoot } from '@/lib/tree-utils';
 
 // Stable reference (module scope) so React Flow doesn't re-register node types.
 const nodeTypes = { turnNode: TurnNodeCard };
@@ -31,6 +32,7 @@ function GraphInner() {
   const setActive = useStore((s) => s.setActive);
   const requestFocus = useStore((s) => s.requestFocus);
   const setMobileTab = useStore((s) => s.setMobileTab);
+  const openWindow = useStore((s) => s.openWindow);
   const { fitView, setCenter, getZoom } = useReactFlow();
 
   const { nodes, edges } = useMemo(() => computeLayout(JSON.parse(sig) as GraphItem[]), [sig]);
@@ -71,6 +73,13 @@ function GraphInner() {
         maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
         onNodeClick={(_, n) => {
+          if ((n.data as GraphItem).kind === 'side') {
+            const all = useStore.getState().nodes;
+            const rootId = findSideRoot(all, n.id);
+            const anchorId = rootId ? all[rootId]?.parentId : null;
+            if (rootId && anchorId) openWindow({ rootId, anchorId });
+            return;
+          }
           setActive(n.id);
           requestFocus(n.id);
           setMobileTab('chat');

@@ -7,6 +7,7 @@ import type { MascotName } from '@/lib/types';
 import { DemoModeBanner } from './DemoModeBanner';
 import { ChatPanel } from './ChatPanel';
 import { GraphView } from './GraphView';
+import { FloatingWindowManager } from './FloatingWindowManager';
 import { MascotWidget } from './MascotWidget';
 import { Download, Upload, RotateCcw, Sparkles } from 'lucide-react';
 
@@ -99,7 +100,7 @@ export function AppShell() {
                 Sakura Chat
               </h1>
               <span className="text-[10px] font-heading font-extrabold px-1.5 py-0.5 rounded-full bg-[var(--mint)] border border-[var(--ink)] text-[var(--ink)]">
-                M2 Tree
+                M3 Windows
               </span>
             </div>
             <p className="text-[11px] font-body text-[var(--ink-light)] font-semibold hidden sm:block">
@@ -210,20 +211,23 @@ export function AppShell() {
       {/* Main Content Area: both panes stay mounted so streams survive tab switches */}
       <main className="flex-1 min-h-0 flex gap-3 p-2 md:p-4">
         <section
-          className={`sticker bg-white overflow-hidden relative min-h-0 md:flex-1 w-full md:w-auto ${
+          className={`sticker-static bg-white overflow-hidden relative min-h-0 md:flex-1 w-full md:w-auto ${
             mobileTab === 'graph' ? 'block' : 'hidden md:block'
           }`}
         >
           <GraphView />
         </section>
         <section
-          className={`sticker bg-white overflow-hidden min-h-0 flex-col w-full md:w-[min(46%,560px)] md:shrink-0 ${
+          className={`sticker-static bg-white overflow-hidden min-h-0 flex-col w-full md:w-[min(46%,560px)] md:shrink-0 ${
             mobileTab === 'chat' ? 'flex' : 'hidden md:flex'
           }`}
         >
           <ChatPanel />
         </section>
       </main>
+
+      {/* Side-branch windows (portal, outside the graph) */}
+      <FloatingWindowManager />
     </div>
   );
 }

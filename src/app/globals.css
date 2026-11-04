@@ -91,6 +91,14 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   box-shadow: 0 1px 0 var(--ink);
 }
 
+/* Same look as .sticker, but never moves (for panes and windows) */
+.sticker-static {
+  border: var(--border-w) solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-offset);
+  background-color: #FFFFFF;
+}
+
 /* Dotted background pattern */
 .bg-sakura-dots {
   background-image: radial-gradient(#FFB7D5 1.5px, transparent 1.5px), radial-gradient(#D4C1F5 1.5px, #FFF8F0 1.5px);

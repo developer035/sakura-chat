@@ -15,6 +15,7 @@ export interface StreamChatCallbacks {
   onCitations?: (citations: SearchCitation[]) => void;
   onDone: () => void;
   onError: (error: Error) => void;
+  signal?: AbortSignal;
 }
 
 export async function streamChat(
@@ -33,7 +34,7 @@ export async function streamChat(
         }
       : onTokenOrCallbacks;
 
-  const signal = typeof onTokenOrCallbacks === 'function' ? signalArg : undefined;
+  const signal = typeof onTokenOrCallbacks === 'function' ? signalArg : onTokenOrCallbacks.signal;
 
   let buffer = '';
   let rafId: number | null = null;
