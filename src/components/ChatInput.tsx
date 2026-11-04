@@ -1,15 +1,17 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Globe, Loader2, Paperclip, Send, Square, X } from 'lucide-react';
+import { Globe, Loader2, Paperclip, Send, Sparkles, Square, X } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { MASCOTS } from '@/lib/constants';
 import { ACCEPT_ATTR, IngestError, MAX_FILES_PER_MESSAGE, ingestFile } from '@/lib/attachments';
 import { del } from '@/lib/file-store';
-import type { Attachment, ToolMode } from '@/lib/types';
+import type { Attachment, ImageSize, ToolMode } from '@/lib/types';
 
 interface ChatInputProps {
-  onSend: (text: string, attachments?: Attachment[], tool?: ToolMode) => void;
+  onSend: (text: string, attachments?: Attachment[], tool?: ToolMode, imageSize?: ImageSize) => void;
+  /** Image produced by the previous turn: offered as the reference when editing in Image mode. */
+  suggestedRef?: Attachment | null;
   onCancel?: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
@@ -24,10 +26,20 @@ interface Pending {
 
 let pendingSeq = 0;
 
-export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = false }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  suggestedRef = null,
+  onCancel,
+  disabled = false,
+  isStreaming = false,
+}: ChatInputProps) {
   const [input, setInput] = useState('');
   const [pending, setPending] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [tool, setTool] = useState<ToolMode | null>(null);
+  const [size, setSize] = useState<ImageSize>('1024x1024');
+  const [useRef_, setUseRef] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -45,7 +57,10 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
 
   const reading = pending.some((p) => !p.att && !p.failed);
   const ready = pending.filter((p) => p.att).map((p) => p.att as Attachment);
-  const canSend = !disabled && !reading && (input.trim().length > 0 || ready.length > 0);
+  const canSend =
+    !disabled && !reading && (tool ? input.trim().length > 0 : input.trim().length > 0 || ready.length > 0);
+  const editingPrev =
+    tool === 'image' && !!suggestedRef && useRef_ && !ready.some((a) => a.kind === 'image');
 
   const addFiles = (files: File[]) => {
     if (!files.length) return;
@@ -93,9 +108,12 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
     const text =
       input.trim() ||
       (ready.some((a) => a.kind !== 'image') ? 'Summarize this document.' : 'Describe this image.');
-    onSend(text, ready.length ? ready : undefined);
+    const atts = editingPrev && suggestedRef ? [...ready, suggestedRef] : ready;
+    onSend(text, atts.length ? atts : undefined, tool ?? undefined, tool === 'image' ? size : undefined);
     setInput('');
     setPending([]);
+    setTool(null);
+    setUseRef(true);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -162,6 +180,51 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
         </div>
       )}
 
+      {/* Active tool chip */}
+      {tool === 'image' && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-[var(--ink)] bg-[var(--lavender)]/60 px-2.5 py-1.5 text-xs font-heading font-semibold text-[var(--ink)]">
+          <span>🖼️ Image mode: describe the picture you want</span>
+          <span className="inline-flex rounded-full border border-[var(--ink)] bg-white overflow-hidden">
+            {(
+              [
+                ['1024x1024', '◻ Square'],
+                ['1536x1024', '▭ Wide'],
+                ['1024x1536', '▯ Tall'],
+              ] as Array<[ImageSize, string]>
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSize(value)}
+                className={`px-2 py-0.5 ${size === value ? 'bg-[var(--pink-main)] font-bold' : 'hover:bg-[var(--cream)]'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </span>
+          {editingPrev && suggestedRef && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--ink)] bg-white pl-1 pr-1.5 py-0.5">
+              {suggestedRef.thumb && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={suggestedRef.thumb} alt="" className="w-5 h-5 rounded object-cover" />
+              )}
+              Editing previous image
+              <button type="button" onClick={() => setUseRef(false)} title="Start a brand-new image instead">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setTool(null)}
+            className="ml-auto p-0.5 rounded-full hover:bg-white/70"
+            title="Leave Image mode"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Pending attachment chips */}
       {pending.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -223,7 +286,9 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
           disabled={disabled || isStreaming}
           rows={1}
           placeholder={
-            webSearchEnabled
+            tool === 'image'
+              ? 'Describe the image you want… 🎨 (Enter to create)'
+              : webSearchEnabled
               ? `Ask ${mascotInfo.name} with live web search... 🌐 (Enter to send)`
               : `Ask ${mascotInfo.name} anything... 🌸 (Enter to send, Shift+Enter for new line)`
           }
@@ -231,6 +296,44 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
         />
 
         <div className="shrink-0 flex items-center gap-1.5 pb-0.5">
+          {/* Create menu */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((o) => !o)}
+              disabled={disabled || isStreaming}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className={`sticker-button text-xs px-2.5 py-2 flex items-center gap-1.5 disabled:opacity-40 ${
+                tool ? 'bg-[var(--lavender)] font-bold' : 'bg-white hover:bg-[var(--cream)] text-[var(--ink-light)] hover:text-[var(--ink)]'
+              }`}
+              title="Create an image"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Create</span>
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute bottom-full right-0 mb-2 z-30 w-48 sticker-static bg-white p-1.5 space-y-1"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTool('image');
+                    setMenuOpen(false);
+                    textareaRef.current?.focus();
+                  }}
+                  className="w-full text-left rounded-xl px-3 py-2 text-sm font-heading font-semibold text-[var(--ink)] hover:bg-[var(--cream)]"
+                >
+                  🖼️ Image
+                  <span className="block text-[11px] font-normal text-[var(--ink-light)]">Muse Image 1.0</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Web Search Toggle Button */}
           <button
             type="button"

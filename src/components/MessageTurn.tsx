@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store';
 import type { TurnNode } from '@/lib/types';
 import { MASCOTS } from '@/lib/constants';
 import { MascotWidget } from './MascotWidget';
-import { AttachmentStrip } from './AttachmentStrip';
+import { AttachmentStrip, GeneratedImages } from './AttachmentStrip';
 import {
   ChevronLeft,
   ChevronRight,
@@ -308,6 +308,13 @@ export function MessageTurn({
               ))}
             </div>
           )}
+
+          {node.tool === 'image' && node.status === 'thinking' && (
+            <div className="mb-2 text-sm font-heading font-semibold text-[var(--ink)] animate-pulse">
+              🎨 Painting your image… this takes a few seconds
+            </div>
+          )}
+          {node.outputs && node.outputs.length > 0 && <GeneratedImages items={node.outputs} />}
 
           {/* Markdown Assistant Content */}
           <div className="prose prose-sm md:prose-base max-w-none text-[var(--ink)] leading-relaxed space-y-2">

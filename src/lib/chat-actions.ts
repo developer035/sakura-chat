@@ -1,11 +1,14 @@
 import { nanoid } from 'nanoid';
+import { blobToDataUrl, del, getBlob, putBlob } from './file-store';
+import { makeThumb } from './attachments';
+import { MAX_IMAGES_PER_SESSION } from './constants';
 import { useStore } from './store';
 import { buildRequestMessages } from './request';
 import { streamChat } from './stream';
 import { CHAT_SYSTEM_PROMPT } from './prompts';
 import { branchSummary, routeMessage, summarize } from './api';
 import { collectSubtree, getMainThread, versionOrigin } from './tree-utils';
-import type { Attachment, NodeKind, SearchCitation, ToolMode, TurnNode } from './types';
+import type { Attachment, ImageSize, NodeKind, SearchCitation, ToolMode, TurnNode } from './types';
 
 /** Abort controllers for in-flight streams, keyed by node id. */
 const inflight = new Map<string, AbortController>();
@@ -146,6 +149,135 @@ function runStream(nodeId: string) {
   })();
 }
 
+
+// ---------------------------------------------------------------------------
+// Image generation / editing (Muse Image 1.0 via /api/image)
+// ---------------------------------------------------------------------------
+const IMAGE_COUNT_KEY = 'sakura-img-count';
+let memoryImageCount = 0;
+
+function takeImageSlot(): boolean {
+  let count = memoryImageCount;
+  try {
+    count = Math.max(count, Number(sessionStorage.getItem(IMAGE_COUNT_KEY) ?? '0') || 0);
+  } catch {
+    /* in-memory fallback */
+  }
+  if (count >= MAX_IMAGES_PER_SESSION) return false;
+  count += 1;
+  memoryImageCount = count;
+  try {
+    sessionStorage.setItem(IMAGE_COUNT_KEY, String(count));
+  } catch {
+    /* ignore */
+  }
+  return true;
+}
+
+const IMAGE_TIMEOUT_MS = 90_000;
+
+function runImage(nodeId: string) {
+  const node = get().nodes[nodeId];
+  if (!node) return;
+
+  const controller = new AbortController();
+  inflight.get(nodeId)?.abort();
+  inflight.set(nodeId, controller);
+  const isCurrent = () => inflight.get(nodeId) === controller;
+  const finish = () => {
+    if (isCurrent()) inflight.delete(nodeId);
+  };
+  const timer = setTimeout(() => controller.abort(new Error('Image generation timed out.')), IMAGE_TIMEOUT_MS);
+
+  get().setMascotState('thinking');
+
+  const fail = (message: string) => {
+    if (!isCurrent()) return;
+    finish();
+    get().updateNode(nodeId, { status: 'error', assistant: `*(${message})*` });
+    get().setMascotState('error');
+  };
+
+  void (async () => {
+    try {
+      if (!takeImageSlot()) {
+        throw new Error(`Image limit reached for this session (${MAX_IMAGES_PER_SESSION}). Open a new tab to keep creating!`);
+      }
+
+      // Reference images: this turn's attached images (an auto-attached previous result counts).
+      const refs: string[] = [];
+      for (const a of (node.attachments ?? []).filter((x) => x.kind === 'image').slice(0, 4)) {
+        const blob = await getBlob(a.blobKey);
+        if (blob) refs.push(await blobToDataUrl(blob));
+      }
+      if (!isCurrent()) return;
+
+      const res = await fetch('/api/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: node.user, size: node.imageSize ?? '1024x1024', refs }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const raw = await res.text().catch(() => '');
+        let message = raw;
+        try {
+          message = JSON.parse(raw).error ?? raw;
+        } catch {
+          /* keep raw */
+        }
+        throw new Error(String(message).slice(0, 300) || `Image request failed (${res.status})`);
+      }
+      const json = await res.json();
+      const b64: unknown = json?.data?.[0]?.b64_json;
+      if (typeof b64 !== 'string' || !b64) throw new Error('The image painter returned nothing. Please retry.');
+      const format = json?.output_format === 'png' ? 'png' : json?.output_format === 'jpeg' ? 'jpeg' : 'webp';
+      const mime = `image/${format}`;
+      const blob = await (await fetch(`data:${mime};base64,${b64}`)).blob();
+      if (!isCurrent()) return;
+
+      const blobKey = `gen-${nanoid()}`;
+      await putBlob(blobKey, blob);
+      const { thumb, width, height } = await makeThumb(blob);
+      if (!isCurrent()) {
+        void del(blobKey);
+        return;
+      }
+      clearTimeout(timer);
+      finish();
+      const edited = refs.length > 0;
+      get().updateNode(nodeId, {
+        outputs: [
+          { id: nanoid(), name: 'sakura-image', mime, size: blob.size, kind: 'image', blobKey, thumb, width, height },
+        ],
+        assistant: edited ? 'Here is your edited image! 🎨' : 'Here is your image! 🎨',
+        summary: `${edited ? 'Edited' : 'Generated'} image: ${node.user.slice(0, 120)}`,
+        status: 'done',
+      });
+      get().setMascotState('success');
+      setTimeout(() => {
+        if (get().mascotState === 'success') get().setMascotState('idle');
+      }, 1500);
+    } catch (err) {
+      clearTimeout(timer);
+      if (!isCurrent()) return;
+      if (controller.signal.aborted && controller.signal.reason === 'user-cancel') {
+        finish();
+        get().updateNode(nodeId, { status: 'done', assistant: '*(Image cancelled)*' });
+        get().setMascotState('idle');
+        return;
+      }
+      fail(err instanceof Error ? err.message : 'Image generation failed.');
+    }
+  })();
+}
+
+/** Starts the right kind of run for a node (chat stream or image generation). */
+function run(nodeId: string) {
+  if (get().nodes[nodeId]?.tool === 'image') runImage(nodeId);
+  else runStream(nodeId);
+}
+
 /**
  * Creates a new turn under parentId and starts streaming the reply.
  * Returns the new node id, or null when the per-session message cap is reached.
@@ -158,6 +290,7 @@ export function sendTurn(opts: {
   versionOf?: string;
   attachments?: Attachment[];
   tool?: ToolMode;
+  imageSize?: ImageSize;
 }): string | null {
   if (!takeMessageSlot()) return null;
 
@@ -171,17 +304,18 @@ export function sendTurn(opts: {
     assistant: '',
     status: 'thinking',
     createdAt: Date.now(),
-    webSearchEnabled: get().webSearchEnabled,
+    webSearchEnabled: get().webSearchEnabled && !opts.tool,
     searchQueries: [],
     citations: [],
     ...(opts.branchRoot ? { branchRoot: true } : {}),
     ...(opts.versionOf ? { versionOf: opts.versionOf } : {}),
     ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
     ...(opts.tool ? { tool: opts.tool } : {}),
+    ...(opts.tool === 'image' ? { imageSize: opts.imageSize ?? '1024x1024' } : {}),
   };
   // Side turns must not move the main panel.
   get().addNode(node, opts.kind === 'main');
-  runStream(id);
+  run(id);
   return id;
 }
 
@@ -190,10 +324,15 @@ export function sendTurn(opts: {
  * in parallel the router decides whether the message is a tangent (moves to a
  * side window) or an unrelated topic (starts a new tree). Both are undoable.
  */
-export function sendMainTurn(text: string, attachments?: Attachment[], tool?: ToolMode): string | null {
+export function sendMainTurn(
+  text: string,
+  attachments?: Attachment[],
+  tool?: ToolMode,
+  imageSize?: ImageSize
+): string | null {
   const thread = getMainThread(get().nodes, get().activeId);
   const parentId = thread.length ? thread[thread.length - 1].id : null;
-  const id = sendTurn({ parentId, text, kind: 'main', attachments, tool });
+  const id = sendTurn({ parentId, text, kind: 'main', attachments, tool, imageSize });
   if (!id) return null;
 
   // Never route the first two messages of a tree.
@@ -265,6 +404,7 @@ export function editTurn(nodeId: string, text: string): string | null {
     versionOf: versionOrigin(n),
     attachments: n.attachments,
     tool: n.tool,
+    imageSize: n.imageSize,
   });
 }
 
@@ -278,8 +418,9 @@ function restartTurn(nodeId: string) {
     status: 'thinking',
     searchQueries: [],
     citations: [],
+    outputs: undefined,
   });
-  runStream(nodeId);
+  run(nodeId);
 }
 
 /** User-initiated retry: counts as a message. */

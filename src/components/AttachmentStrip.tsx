@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, X } from 'lucide-react';
+import { Download, FileText, X } from 'lucide-react';
+import { getBlob } from '@/lib/file-store';
 import type { Attachment } from '@/lib/types';
 import { useBlobUrl } from './useBlobUrl';
 
@@ -90,5 +91,73 @@ export function AttachmentStrip({ items, onOpen }: { items: Attachment[]; onOpen
       </div>
       {open && <ImageLightbox att={open} onClose={() => setOpen(null)} />}
     </>
+  );
+}
+
+/** Saves a stored image as a PNG (generated images are WebP, which many tools can't open). */
+async function downloadAsPng(att: Attachment) {
+  const blob = await getBlob(att.blobKey);
+  if (!blob) return;
+  let out = blob;
+  if (blob.type !== 'image/png') {
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement('canvas');
+    c.width = bmp.width;
+    c.height = bmp.height;
+    c.getContext('2d')?.drawImage(bmp, 0, 0);
+    bmp.close();
+    out = await new Promise<Blob>((resolve) => c.toBlob((b) => resolve(b ?? blob), 'image/png'));
+  }
+  const url = URL.createObjectURL(out);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sakura-image-${Date.now()}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function GeneratedImage({ att, onOpen }: { att: Attachment; onOpen: () => void }) {
+  const url = useBlobUrl(att.blobKey);
+  return (
+    <div className="space-y-1.5">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="block rounded-2xl border-2 border-[var(--ink)] overflow-hidden bg-[var(--cream)] shadow-[0_3px_0_var(--ink)]"
+        style={{ aspectRatio: att.width && att.height ? `${att.width} / ${att.height}` : undefined, maxWidth: 'min(100%, 420px)' }}
+        title="Click to enlarge"
+      >
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="Generated" className="w-full h-full object-cover" />
+        ) : att.thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={att.thumb} alt="Generated (loading)" className="w-full h-full object-cover blur-sm" />
+        ) : null}
+      </button>
+      <button
+        type="button"
+        onClick={() => void downloadAsPng(att)}
+        className="sticker-button bg-white hover:bg-[var(--cream)] px-2.5 py-1 text-xs text-[var(--ink)]"
+      >
+        <Download className="w-3.5 h-3.5" />
+        <span>Download PNG</span>
+      </button>
+    </div>
+  );
+}
+
+/** Images produced by the image tool, shown inside the assistant bubble. */
+export function GeneratedImages({ items }: { items: Attachment[] }) {
+  const [open, setOpen] = useState<Attachment | null>(null);
+  return (
+    <div className="mb-3 space-y-3">
+      {items.map((a) => (
+        <GeneratedImage key={a.id} att={a} onOpen={() => setOpen(a)} />
+      ))}
+      {open && <ImageLightbox att={open} onClose={() => setOpen(null)} />}
+    </div>
   );
 }

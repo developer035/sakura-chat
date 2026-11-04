@@ -1,5 +1,9 @@
 export const META_MODEL_CHAT = 'muse-spark-1.3';
 export const META_API_URL = 'https://api.meta.ai/v1/chat/completions';
+export const META_MODEL_IMAGE = 'muse-image-1.0';
+export const META_IMAGES_URL = 'https://api.meta.ai/v1/images/generations';
+export const META_IMAGE_EDITS_URL = 'https://api.meta.ai/v1/images/edits';
+export const MAX_IMAGES_PER_SESSION = 40;
 export const META_RESPONSES_URL = 'https://api.meta.ai/v1/responses';
 
 export const SYSTEM_PROMPT_RESERVE = 500;

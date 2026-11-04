@@ -16,7 +16,7 @@ import {
 } from '@/lib/chat-actions';
 import { scrollBehavior } from '@/lib/motion';
 import { ChatInput } from './ChatInput';
-import type { Attachment, ToolMode } from '@/lib/types';
+import type { Attachment, ImageSize, ToolMode } from '@/lib/types';
 import { MessageTurn } from './MessageTurn';
 
 /** First sentence of the branch's last finished reply, stripped of markdown, max 140 chars. */
@@ -134,12 +134,12 @@ function WindowContent({
     endRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'end' });
   }, [leaf?.id, leaf?.assistant]);
 
-  const handleSend = (text: string, attachments?: Attachment[], tool?: ToolMode) => {
+  const handleSend = (text: string, attachments?: Attachment[], tool?: ToolMode, imageSize?: ImageSize) => {
     if (!win.rootId) {
-      const id = sendTurn({ parentId: win.anchorId, text, kind: 'side', branchRoot: true, attachments, tool });
+      const id = sendTurn({ parentId: win.anchorId, text, kind: 'side', branchRoot: true, attachments, tool, imageSize });
       if (id) setWindowRoot(win.id, id);
     } else if (leaf) {
-      sendTurn({ parentId: leaf.id, text, kind: 'side', attachments, tool });
+      sendTurn({ parentId: leaf.id, text, kind: 'side', attachments, tool, imageSize });
     }
   };
 
@@ -226,6 +226,7 @@ function WindowContent({
       <div className="fw-nodrag p-2.5 bg-white/80 border-t border-[var(--ink)]/10 shrink-0">
         <ChatInput
           onSend={handleSend}
+          suggestedRef={leaf?.outputs?.[0] ?? (win.rootId ? null : anchor?.outputs?.[0] ?? null)}
           onCancel={() => leaf && cancelTurn(leaf.id)}
           isStreaming={busy}
         />

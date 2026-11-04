@@ -16,7 +16,7 @@ import { scrollBehavior } from '@/lib/motion';
 import { MascotWidget } from './MascotWidget';
 import { Breadcrumbs } from './Breadcrumbs';
 import { ChatInput } from './ChatInput';
-import type { Attachment, ToolMode } from '@/lib/types';
+import type { Attachment, ImageSize, ToolMode } from '@/lib/types';
 import { EmptyChatState, MessageTurn } from './MessageTurn';
 import { ArrowDown, Globe, ScanSearch } from 'lucide-react';
 
@@ -79,8 +79,13 @@ export function ChatPanel() {
     if (isStreaming) messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
   }, [activeNode?.assistant, isStreaming]);
 
-  const handleSendMessage = (text: string, attachments?: Attachment[], tool?: ToolMode) => {
-    sendMainTurn(text, attachments, tool);
+  const handleSendMessage = (
+    text: string,
+    attachments?: Attachment[],
+    tool?: ToolMode,
+    imageSize?: ImageSize
+  ) => {
+    sendMainTurn(text, attachments, tool, imageSize);
     requestAnimationFrame(scrollToBottom);
   };
 
@@ -186,6 +191,7 @@ export function ChatPanel() {
       <div className="p-4 md:px-6 md:pb-6 bg-white/70 border-t border-[var(--ink)]/10 shrink-0">
         <ChatInput
           onSend={handleSendMessage}
+          suggestedRef={thread.length ? (thread[thread.length - 1].outputs?.[0] ?? null) : null}
           onCancel={() => leafId && cancelTurn(leafId)}
           isStreaming={isStreaming}
         />
