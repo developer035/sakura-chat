@@ -372,18 +372,29 @@ export function sendMainTurn(
         },
       });
     } else if (result.decision === 'new_topic') {
-      st.updateNode(id, { parentId: null });
+      // An unrelated topic gets its own chat (and its own graph) in the sidebar.
+      const oldConv = node.conversationId;
+      const newConv = st.createConversation(result.title || node.title);
+      st.updateNode(id, { parentId: null, conversationId: newConv });
+      st.setActive(id);
       restartTurn(id);
       st.setMascotState('branching');
       st.pushToast({
-        message: '🌱 Fresh topic, so I started a new tree',
+        message: '🌱 Fresh topic, so I started a new chat',
         actionLabel: 'Keep in thread',
         onAction: () => {
           const s = get();
           if (!s.nodes[id]) return;
-          s.updateNode(id, { parentId });
+          // The new chat already carries on without this turn? Then leave it as it is.
+          if (Object.values(s.nodes).some((n) => n.conversationId === newConv && n.id !== id)) {
+            s.pushToast({ message: '🍵 That chat has already continued, so it stays separate' });
+            return;
+          }
+          s.updateNode(id, { parentId, conversationId: oldConv });
+          s.deleteConversation(newConv);
+          if (oldConv) get().switchConversation(oldConv);
+          get().setActive(id);
           restartTurn(id);
-          s.setActive(id);
         },
       });
     }
@@ -470,6 +481,38 @@ export function requestDeleteTurn(id: string) {
     message,
     confirmLabel: total === 1 ? 'Delete turn' : `Delete ${total} turns`,
     onConfirm: () => deleteTurn(id),
+  });
+}
+
+/** Asks for confirmation, then deletes a whole chat (all of its turns) with an Undo toast. */
+export function requestDeleteConversation(id: string) {
+  const st = get();
+  const conv = st.conversations[id];
+  if (!conv) return;
+  const count = Object.values(st.nodes).filter((n) => n.conversationId === id).length;
+  const title = conv.title.length > 40 ? `${conv.title.slice(0, 40)}...` : conv.title;
+  st.askConfirm({
+    title: `Delete \u201c${title}\u201d?`,
+    message:
+      count === 0
+        ? 'This empty chat will be removed.'
+        : `This deletes all ${count} turn${count === 1 ? '' : 's'} in this chat, side branches included. You can undo right after.`,
+    confirmLabel: 'Delete chat',
+    onConfirm: () => {
+      const s = get();
+      const doomed = Object.fromEntries(
+        Object.entries(s.nodes).filter(([, n]) => n.conversationId === id)
+      );
+      Object.keys(doomed).forEach((nodeId) => {
+        if (inflight.has(nodeId)) cancelTurn(nodeId);
+      });
+      s.deleteConversation(id);
+      get().pushToast({
+        message: `\uD83D\uDDD1\uFE0F Deleted \u201c${title}\u201d`,
+        actionLabel: 'Undo',
+        onAction: () => get().restoreConversation(conv, doomed),
+      });
+    },
   });
 }
 

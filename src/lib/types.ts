@@ -40,6 +40,13 @@ export interface Attachment {
   thumb?: string; // tiny JPEG data URL
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface TurnNode {
   id: string;
   parentId: string | null;
@@ -57,6 +64,7 @@ export interface TurnNode {
   webSearchEnabled?: boolean;
   branchRoot?: boolean; // first node of a branch created via "Branch"
   versionOf?: string; // id of the first version, when this turn is an edited sibling
+  conversationId?: string; // which conversation (sidebar entry) this turn belongs to
   attachments?: Attachment[]; // user uploads for this turn
   outputs?: Attachment[]; // generated images
   tool?: ToolMode;
@@ -105,6 +113,18 @@ export interface AppStore {
   toasts: Toast[];
   inspectorTarget: string | null;
   confirmDialog: ConfirmRequest | null;
+  conversations: Record<string, Conversation>;
+  activeConversationId: string | null;
+  sidebarOpen: boolean;
+
+  // Conversation actions
+  createConversation: (title?: string) => string;
+  switchConversation: (id: string) => void;
+  renameConversation: (id: string, title: string) => void;
+  /** Removes the conversation and all of its turns (callers confirm first). */
+  deleteConversation: (id: string) => void;
+  restoreConversation: (conversation: Conversation, nodes: Record<string, TurnNode>) => void;
+  toggleSidebar: () => void;
 
   // UI actions
   setAutoRoute: (enabled: boolean) => void;

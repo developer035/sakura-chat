@@ -32,10 +32,13 @@ export type TurnFlowNode = Node<GraphItem, 'turnNode'>;
  */
 export function graphSignature(
   nodes: Record<string, TurnNode>,
-  activeId: string | null
+  activeId: string | null,
+  conversationId?: string | null
 ): string {
   const onPath = new Set(getBranchPath(nodes, activeId).map((n) => n.id));
   const items: GraphItem[] = Object.values(nodes)
+    // Each conversation owns its own graph.
+    .filter((n) => !conversationId || n.conversationId === conversationId)
     .sort((a, b) => a.createdAt - b.createdAt)
     .map((n) => ({
       id: n.id,

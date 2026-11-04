@@ -14,7 +14,23 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { MascotWidget } from './MascotWidget';
 import { setFileStoreFallbackHandler } from '@/lib/file-store';
 import { cleanupFiles, embedFiles, restoreFiles } from '@/lib/bundle';
-import { Download, Ellipsis, Upload, RotateCcw, Sparkles } from 'lucide-react';
+import { ChatSidebar } from './ChatSidebar';
+import { ResizableDivider } from './ResizableDivider';
+import { Download, Ellipsis, Menu, Upload, RotateCcw, Sparkles } from 'lucide-react';
+
+const PANEL_KEY = 'sakura-panel-width';
+const DEFAULT_CHAT_WIDTH = 480;
+const MIN_CHAT = 280;
+const MIN_GRAPH = 250;
+
+function readSavedWidth(): number {
+  try {
+    const n = Number(localStorage.getItem(PANEL_KEY));
+    return Number.isFinite(n) && n >= MIN_CHAT ? n : DEFAULT_CHAT_WIDTH;
+  } catch {
+    return DEFAULT_CHAT_WIDTH;
+  }
+}
 
 export function AppShell() {
   const hydrated = useSyncExternalStore(
@@ -25,6 +41,12 @@ export function AppShell() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileSidebar, setMobileSidebar] = useState(false);
+  const [chatWidth, setChatWidth] = useState(readSavedWidth);
+  const [mainWidth, setMainWidth] = useState(0);
+  const mainRef = useRef<HTMLElement | null>(null);
+  const widthRef = useRef(chatWidth);
+  const sidebarOpen = useStore((s) => s.sidebarOpen);
 
   const demoMode = useStore((s) => s.demoMode);
   const currentMascot = useStore((s) => s.currentMascot);
@@ -40,6 +62,16 @@ export function AppShell() {
   const pushToast = useStore((s) => s.pushToast);
   const askConfirm = useStore((s) => s.askConfirm);
   const hasNodes = useStore((s) => Object.keys(s.nodes).length > 0);
+
+  // Track the available width so the chat panel can be clamped as the window changes.
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setMainWidth(el.clientWidth));
+    ro.observe(el);
+    setMainWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, [hydrated]);
 
   // One-time heads-up if the browser blocks IndexedDB (files then live in memory only).
   useEffect(() => {
@@ -81,6 +113,31 @@ export function AppShell() {
       document.removeEventListener('keydown', onKey);
     };
   }, [menuOpen]);
+
+  // Chat width limits: graph keeps >= 250px, chat >= 280px and at most 75% of the space.
+  const sidebarW = sidebarOpen ? 240 : 48;
+  const available = Math.max(0, mainWidth - 32 - sidebarW - 6 - 24);
+  const maxChat = Math.max(MIN_CHAT, Math.min(available * 0.75, available - MIN_GRAPH));
+  const effectiveChat = mainWidth > 0 ? Math.round(Math.min(Math.max(chatWidth, MIN_CHAT), maxChat)) : chatWidth;
+
+  const resizeBy = (delta: number) => {
+    // Dragging the divider right makes the chat narrower.
+    const next = Math.min(Math.max(effectiveChat - delta, MIN_CHAT), maxChat);
+    widthRef.current = next;
+    setChatWidth(next);
+  };
+  const saveWidth = () => {
+    try {
+      localStorage.setItem(PANEL_KEY, String(Math.round(widthRef.current)));
+    } catch {
+      /* ignore */
+    }
+  };
+  const resetWidth = () => {
+    widthRef.current = DEFAULT_CHAT_WIDTH;
+    setChatWidth(DEFAULT_CHAT_WIDTH);
+    saveWidth();
+  };
 
   const handleReset = () => {
     const count = Object.keys(useStore.getState().nodes).length;
@@ -177,6 +234,14 @@ export function AppShell() {
       <header className="border-b-2 border-[var(--ink)] bg-white/95 backdrop-blur px-4 py-2.5 flex items-center justify-between shrink-0 z-30">
         {/* Logo and Brand */}
         <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setMobileSidebar(true)}
+            className="md:hidden p-1.5 sticker-button bg-white text-[var(--ink)]"
+            title="Chats"
+          >
+            <Menu className="w-4 h-4" />
+          </button>
           <div className="hidden sm:flex w-10 h-10 rounded-2xl bg-[var(--pink-main)] border-2 border-[var(--ink)] items-center justify-center shadow-[0_2px_0_var(--ink)] shrink-0">
             <span className="text-xl">🌸</span>
           </div>
@@ -188,7 +253,7 @@ export function AppShell() {
                 Sakura Chat
               </h1>
               <span className="text-[10px] font-heading font-extrabold px-1.5 py-0.5 rounded-full bg-[var(--mint)] border border-[var(--ink)] text-[var(--ink)]">
-                M5 Polish
+                Multi-chat
               </span>
             </div>
             <p className="text-[11px] font-body text-[var(--ink-light)] font-semibold hidden sm:block">
@@ -358,22 +423,41 @@ export function AppShell() {
       </div>
 
       {/* Main Content Area: both panes stay mounted so streams survive tab switches */}
-      <main className="flex-1 min-h-0 flex gap-3 p-2 md:p-4">
+      <main
+        ref={mainRef}
+        className="flex-1 min-h-0 flex gap-1.5 md:gap-2 p-2 md:p-4"
+        style={{ '--chat-w': `${effectiveChat}px` } as React.CSSProperties}
+      >
+        <ChatSidebar variant="desktop" />
         <section
-          className={`sticker-static bg-white overflow-hidden relative min-h-0 md:flex-1 w-full md:w-auto ${
+          className={`sticker-static bg-white overflow-hidden relative min-h-0 md:flex-1 md:min-w-[250px] w-full md:w-auto ${
             mobileTab === 'graph' ? 'block' : 'hidden md:block'
           }`}
         >
           <GraphView />
         </section>
+        <ResizableDivider onResize={resizeBy} onResizeEnd={saveWidth} onReset={resetWidth} />
         <section
-          className={`sticker-static bg-white overflow-hidden min-h-0 flex-col w-full md:w-[min(46%,560px)] md:shrink-0 ${
+          className={`sticker-static bg-white overflow-hidden min-h-0 flex-col w-full md:w-[var(--chat-w)] md:min-w-[280px] md:shrink-0 ${
             mobileTab === 'chat' ? 'flex' : 'hidden md:flex'
           }`}
         >
           <ChatPanel />
         </section>
       </main>
+
+      {/* Mobile: chat list slides in from the left */}
+      {mobileSidebar && (
+        <>
+          <div
+            className="md:hidden fixed inset-0 z-[1040] bg-[var(--ink)]/40"
+            onClick={() => setMobileSidebar(false)}
+          />
+          <div className="md:hidden">
+            <ChatSidebar variant="overlay" onNavigate={() => setMobileSidebar(false)} />
+          </div>
+        </>
+      )}
 
       {/* Side-branch windows (portal, outside the graph) */}
       <FloatingWindowManager />

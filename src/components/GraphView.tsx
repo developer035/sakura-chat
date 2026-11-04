@@ -27,7 +27,8 @@ import { findSideRoot } from '@/lib/tree-utils';
 const nodeTypes = { turnNode: TurnNodeCard };
 
 function GraphInner() {
-  const sig = useStore((s) => graphSignature(s.nodes, s.activeId));
+  const sig = useStore((s) => graphSignature(s.nodes, s.activeId, s.activeConversationId));
+  const conversationId = useStore((s) => s.activeConversationId);
   const focusRequest = useStore((s) => s.focusRequest);
   const mobileTab = useStore((s) => s.mobileTab);
   const setActive = useStore((s) => s.setActive);
@@ -56,7 +57,7 @@ function GraphInner() {
     });
     return () => cancelAnimationFrame(r);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes.length, mobileTab, fitView]);
+  }, [nodes.length, mobileTab, conversationId, fitView]);
 
   // Center on the requested node.
   useEffect(() => {

@@ -1,4 +1,4 @@
-import type { Attachment, NodeStatus, SearchCitation, TurnNode, WindowState } from './types';
+import type { Attachment, Conversation, NodeStatus, SearchCitation, TurnNode, WindowState } from './types';
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -81,6 +81,8 @@ function sanitizeNode(key: string, v: unknown): TurnNode | null {
     createdAt: num(v.createdAt) ?? Date.now(),
   };
 
+  const conversationId = str(v.conversationId);
+  if (conversationId) node.conversationId = conversationId;
   const summary = str(v.summary);
   if (summary) node.summary = summary;
   const pin = str(v.pin);
@@ -165,4 +167,18 @@ export function sanitizeWindows(raw: unknown, nodes: Record<string, TurnNode>): 
     out.push({ id, anchorId, rootId, x, y, w: wd, h, z, minimized: w.minimized === true });
   }
   return out.slice(0, 3);
+}
+
+/** Validates an untrusted `conversations` map (localStorage or an imported file). */
+export function sanitizeConversations(raw: unknown): Record<string, Conversation> {
+  const out: Record<string, Conversation> = {};
+  if (!isObj(raw)) return out;
+  for (const [key, v] of Object.entries(raw)) {
+    if (!isObj(v)) continue;
+    const id = str(v.id) ?? key;
+    const title = (str(v.title) ?? '').trim().slice(0, 80);
+    const createdAt = num(v.createdAt) ?? Date.now();
+    out[id] = { id, title: title || 'New chat', createdAt, updatedAt: num(v.updatedAt) ?? createdAt };
+  }
+  return out;
 }
