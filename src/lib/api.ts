@@ -50,10 +50,17 @@ export async function summarize(user: string, assistant: string): Promise<string
   }
 }
 
-/** Compact description of the recent main thread, for the router. */
-export function branchSummary(thread: TurnNode[]): string {
-  return thread
-    .slice(-4)
-    .map((n) => n.summary ?? `${n.title}: ${n.user.slice(0, 150)}`)
-    .join('\n');
+/**
+ * The recent main thread as the router sees it: the last 3 turns with the user's message AND
+ * the assistant's actual reply (follow-ups usually refer to something in the reply).
+ */
+export function routerContext(thread: TurnNode[]): string {
+  const recent = thread.slice(-3);
+  return recent
+    .map((n, i) => {
+      const isLast = i === recent.length - 1;
+      const reply = (n.assistant || n.summary || '').replace(/\s+/g, ' ').trim();
+      return `User: ${n.user.slice(0, 200)}\nAssistant: ${reply.slice(0, isLast ? 800 : 500)}`;
+    })
+    .join('\n\n');
 }

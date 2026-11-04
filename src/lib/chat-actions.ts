@@ -6,7 +6,8 @@ import { useStore } from './store';
 import { buildRequestMessages } from './request';
 import { streamChat } from './stream';
 import { CHAT_SYSTEM_PROMPT, DOCUMENT_SYSTEM_PROMPT } from './prompts';
-import { branchSummary, routeMessage, summarize } from './api';
+import { routeMessage, routerContext, summarize } from './api';
+import { isRelatedToThread } from './route-guard';
 import { collectSubtree, getMainThread, versionOrigin } from './tree-utils';
 import type { Attachment, ImageSize, NodeKind, SearchCitation, ToolMode, TurnNode } from './types';
 
@@ -343,8 +344,12 @@ export function sendMainTurn(
   // Turns with files or a tool never auto-route (they need to stay where the user put them).
   if (!get().autoRoute || !parentId || thread.length < 2 || attachments?.length || tool) return id;
 
+  // A message that obviously builds on the recent thread (or the assistant's replies) is a
+  // continuation: skip the router entirely.
+  if (isRelatedToThread(thread, text)) return id;
+
   void (async () => {
-    const result = await routeMessage(branchSummary(thread), text);
+    const result = await routeMessage(routerContext(thread), text);
 
     // Ignore stale results: node gone, already moved, or the user has moved on.
     const st = get();
