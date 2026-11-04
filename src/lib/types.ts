@@ -49,6 +49,13 @@ export interface WindowState {
   minimized: boolean;
 }
 
+export interface Toast {
+  id: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
 export interface AppStore {
   // State
   nodes: Record<string, TurnNode>;
@@ -60,8 +67,16 @@ export interface AppStore {
   webSearchEnabled: boolean;
   focusRequest: { id: string; nonce: number } | null;
   mobileTab: 'graph' | 'chat';
+  autoRoute: boolean;
+  toasts: Toast[];
+  inspectorTarget: string | null;
 
   // UI actions
+  setAutoRoute: (enabled: boolean) => void;
+  pushToast: (toast: Omit<Toast, 'id'>) => string;
+  dismissToast: (id: string) => void;
+  openInspector: (nodeId: string) => void;
+  closeInspector: () => void;
   requestFocus: (id: string) => void;
   setMobileTab: (tab: 'graph' | 'chat') => void;
 

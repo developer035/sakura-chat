@@ -15,6 +15,20 @@ export const useStore = create<AppStore>()(
       webSearchEnabled: false,
       focusRequest: null,
       mobileTab: 'chat',
+      autoRoute: true,
+      toasts: [],
+      inspectorTarget: null,
+
+      setAutoRoute: (autoRoute: boolean) => set({ autoRoute }),
+      pushToast: (toast) => {
+        const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        set((state) => ({ toasts: [...state.toasts, { ...toast, id }].slice(-3) }));
+        return id;
+      },
+      dismissToast: (id: string) =>
+        set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+      openInspector: (inspectorTarget: string) => set({ inspectorTarget }),
+      closeInspector: () => set({ inspectorTarget: null }),
 
       requestFocus: (id: string) => set({ focusRequest: { id, nonce: Date.now() } }),
       setMobileTab: (mobileTab: 'graph' | 'chat') => set({ mobileTab }),
@@ -206,6 +220,7 @@ export const useStore = create<AppStore>()(
             windows: [],
             demoMode: false,
             focusRequest: null,
+            inspectorTarget: null,
           });
           return true;
         } catch {
@@ -221,6 +236,7 @@ export const useStore = create<AppStore>()(
           demoMode: false,
           mascotState: 'idle',
           focusRequest: null,
+          inspectorTarget: null,
         });
       },
 
@@ -232,6 +248,7 @@ export const useStore = create<AppStore>()(
           demoMode: true,
           mascotState: 'success',
           focusRequest: null,
+          inspectorTarget: null,
         });
       },
 
@@ -248,6 +265,7 @@ export const useStore = create<AppStore>()(
         currentMascot: state.currentMascot,
         demoMode: state.demoMode,
         windows: state.windows,
+        autoRoute: state.autoRoute,
       }),
     }
   )

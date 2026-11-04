@@ -8,6 +8,8 @@ import { DemoModeBanner } from './DemoModeBanner';
 import { ChatPanel } from './ChatPanel';
 import { GraphView } from './GraphView';
 import { FloatingWindowManager } from './FloatingWindowManager';
+import { ToastHost } from './Toast';
+import { ContextInspector } from './ContextInspector';
 import { MascotWidget } from './MascotWidget';
 import { Download, Upload, RotateCcw, Sparkles } from 'lucide-react';
 
@@ -23,6 +25,8 @@ export function AppShell() {
   const currentMascot = useStore((s) => s.currentMascot);
   const setCurrentMascot = useStore((s) => s.setCurrentMascot);
   const mobileTab = useStore((s) => s.mobileTab);
+  const autoRoute = useStore((s) => s.autoRoute);
+  const setAutoRoute = useStore((s) => s.setAutoRoute);
   const setMobileTab = useStore((s) => s.setMobileTab);
   const loadDemo = useStore((s) => s.loadDemo);
   const reset = useStore((s) => s.reset);
@@ -100,7 +104,7 @@ export function AppShell() {
                 Sakura Chat
               </h1>
               <span className="text-[10px] font-heading font-extrabold px-1.5 py-0.5 rounded-full bg-[var(--mint)] border border-[var(--ink)] text-[var(--ink)]">
-                M3 Windows
+                M4 Router
               </span>
             </div>
             <p className="text-[11px] font-body text-[var(--ink-light)] font-semibold hidden sm:block">
@@ -134,6 +138,20 @@ export function AppShell() {
 
         {/* Action Controls */}
         <div className="flex items-center gap-1.5 md:gap-2">
+          {/* Auto-branch toggle */}
+          <button
+            onClick={() => setAutoRoute(!autoRoute)}
+            role="switch"
+            aria-checked={autoRoute}
+            className={`sticker-button text-xs px-3 py-1.5 text-[var(--ink)] ${
+              autoRoute ? 'bg-[var(--lavender)]' : 'bg-white opacity-70'
+            }`}
+            title="Let Muse Spark move tangents into side windows automatically"
+          >
+            <span>✨</span>
+            <span className="hidden sm:inline">Auto-branch {autoRoute ? 'on' : 'off'}</span>
+          </button>
+
           {/* Demo Button */}
           <button
             onClick={loadDemo}
@@ -228,6 +246,8 @@ export function AppShell() {
 
       {/* Side-branch windows (portal, outside the graph) */}
       <FloatingWindowManager />
+      <ContextInspector />
+      <ToastHost />
     </div>
   );
 }

@@ -4,12 +4,12 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/lib/store';
 import { MASCOTS } from '@/lib/constants';
 import { getMainThread, sideRootsOf } from '@/lib/tree-utils';
-import { cancelTurn, isBusy, retryTurn, sendTurn } from '@/lib/chat-actions';
+import { cancelTurn, isBusy, retryTurn, sendMainTurn } from '@/lib/chat-actions';
 import { MascotWidget } from './MascotWidget';
 import { Breadcrumbs } from './Breadcrumbs';
 import { ChatInput } from './ChatInput';
 import { EmptyChatState, MessageTurn } from './MessageTurn';
-import { ArrowDown, Globe } from 'lucide-react';
+import { ArrowDown, Globe, ScanSearch } from 'lucide-react';
 
 /** Main conversation panel: shows the main thread only. Side branches live in floating windows. */
 export function ChatPanel() {
@@ -20,6 +20,7 @@ export function ChatPanel() {
   const focusRequest = useStore((s) => s.focusRequest);
   const requestFocus = useStore((s) => s.requestFocus);
   const openWindow = useStore((s) => s.openWindow);
+  const openInspector = useStore((s) => s.openInspector);
 
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -70,7 +71,7 @@ export function ChatPanel() {
   }, [activeNode?.assistant, isStreaming]);
 
   const handleSendMessage = (text: string) => {
-    sendTurn({ parentId: leafId, text, kind: 'main' });
+    sendMainTurn(text);
     requestAnimationFrame(scrollToBottom);
   };
 
@@ -82,7 +83,21 @@ export function ChatPanel() {
   return (
     <div className="flex flex-col h-full bg-[var(--bg-cream)] relative">
       <div className="border-b-2 border-[var(--ink)]/15 bg-white/95 backdrop-blur px-4 py-2 shrink-0 z-10 shadow-sm">
-        <Breadcrumbs thread={thread} focusedNodeId={focusedNodeId} onScrollToNode={requestFocus} />
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <Breadcrumbs thread={thread} focusedNodeId={focusedNodeId} onScrollToNode={requestFocus} />
+          </div>
+          <button
+            type="button"
+            disabled={!leafId}
+            onClick={() => leafId && openInspector(leafId)}
+            className="sticker-button shrink-0 bg-[var(--mint)] px-2.5 py-1 text-xs text-[var(--ink)] disabled:opacity-40"
+            title="Inspect the context sent with your next message"
+          >
+            <ScanSearch className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Context</span>
+          </button>
+        </div>
       </div>
 
       <div onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 relative">

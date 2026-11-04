@@ -15,6 +15,7 @@ export interface GraphItem extends Record<string, unknown> {
   preview: string;
   status: NodeStatus;
   hasPin: boolean;
+  excluded: boolean;
   web: boolean;
   onPath: boolean;
   active: boolean;
@@ -41,6 +42,7 @@ export function graphSignature(
       preview: n.user.slice(0, 70),
       status: n.status,
       hasPin: !!n.pin,
+      excluded: !!n.excluded,
       web: !!n.webSearchEnabled,
       onPath: onPath.has(n.id),
       active: n.id === activeId,

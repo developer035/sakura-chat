@@ -62,6 +62,11 @@ export function FloatingWindowManager() {
     const onKey = (e: KeyboardEvent) => {
       const st = useStore.getState();
       if (e.key === 'Escape') {
+        if (st.inspectorTarget) {
+          e.preventDefault();
+          st.closeInspector();
+          return;
+        }
         const top = liveWindows(st.windows, st.nodes).filter((w) => !w.minimized).pop();
         if (!top) return;
         e.preventDefault();

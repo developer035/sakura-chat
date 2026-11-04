@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Rnd } from 'react-rnd';
-import { Minus, Pin, X } from 'lucide-react';
+import { Minus, Pin, ScanSearch, X } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import type { TurnNode, WindowState } from '@/lib/types';
 import { getSideThread, sideRootsOf } from '@/lib/tree-utils';
@@ -14,6 +14,9 @@ import { MessageTurn } from './MessageTurn';
 export function defaultPinText(thread: TurnNode[]): string {
   const last = [...thread].reverse().find((n) => n.status === 'done' && n.assistant.trim());
   if (!last) return '';
+  if (last.summary) {
+    return last.summary.length > 140 ? `${last.summary.slice(0, 137)}...` : last.summary;
+  }
   const plain = last.assistant
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/[*_#>`~[\]]/g, '')
@@ -109,6 +112,7 @@ function WindowContent({
   const setWindowRoot = useStore((s) => s.setWindowRoot);
   const minimizeWindow = useStore((s) => s.minimizeWindow);
   const closeWindow = useStore((s) => s.closeWindow);
+  const openInspector = useStore((s) => s.openInspector);
   const updateNode = useStore((s) => s.updateNode);
 
   const endRef = useRef<HTMLDivElement>(null);
@@ -149,6 +153,14 @@ function WindowContent({
             </div>
           )}
         </div>
+        <button
+          type="button"
+          className="fw-nodrag p-1 rounded-full hover:bg-white/70 text-[var(--ink)]"
+          onClick={() => openInspector(leaf ? leaf.id : win.anchorId)}
+          title="Inspect context"
+        >
+          <ScanSearch className="w-4 h-4" />
+        </button>
         {draggable && (
           <button
             type="button"

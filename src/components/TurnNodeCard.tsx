@@ -17,7 +17,7 @@ function TurnNodeCardInner({ data }: NodeProps<TurnFlowNode>) {
 
   const border = isSide ? 'border-[var(--lavender)]' : 'border-[var(--ink)]';
   const ring = data.active ? 'ring-4 ring-[var(--pink-deep)]/70' : '';
-  const dim = data.onPath ? 'opacity-100' : 'opacity-70';
+  const dim = data.excluded ? 'opacity-40' : data.onPath ? 'opacity-100' : 'opacity-70';
 
   return (
     <div
@@ -34,7 +34,11 @@ function TurnNodeCardInner({ data }: NodeProps<TurnFlowNode>) {
         >
           {badge}
         </span>
-        <span className="font-heading font-bold text-sm text-[var(--ink)] truncate flex-1">
+        <span
+          className={`font-heading font-bold text-sm text-[var(--ink)] truncate flex-1 ${
+            data.excluded ? 'line-through' : ''
+          }`}
+        >
           {data.title}
         </span>
         {busy ? (
