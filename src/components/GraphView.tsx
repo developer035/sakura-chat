@@ -1,0 +1,105 @@
+'use client';
+
+import React, { useEffect, useMemo } from 'react';
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { useStore } from '@/lib/store';
+import {
+  NODE_HEIGHT,
+  NODE_WIDTH,
+  computeLayout,
+  graphSignature,
+  type GraphItem,
+} from '@/lib/graph-layout';
+import { TurnNodeCard } from './TurnNodeCard';
+
+// Stable reference (module scope) so React Flow doesn't re-register node types.
+const nodeTypes = { turnNode: TurnNodeCard };
+
+function GraphInner() {
+  const sig = useStore((s) => graphSignature(s.nodes, s.activeId));
+  const focusRequest = useStore((s) => s.focusRequest);
+  const mobileTab = useStore((s) => s.mobileTab);
+  const setActive = useStore((s) => s.setActive);
+  const requestFocus = useStore((s) => s.requestFocus);
+  const setMobileTab = useStore((s) => s.setMobileTab);
+  const { fitView, setCenter, getZoom } = useReactFlow();
+
+  const { nodes, edges } = useMemo(() => computeLayout(JSON.parse(sig) as GraphItem[]), [sig]);
+
+  // Refit when the number of nodes changes or the graph tab becomes visible.
+  useEffect(() => {
+    const r = requestAnimationFrame(() => fitView({ padding: 0.2, duration: 400 }));
+    return () => cancelAnimationFrame(r);
+  }, [nodes.length, mobileTab, fitView]);
+
+  // Center on the requested node.
+  useEffect(() => {
+    if (!focusRequest) return;
+    const target = nodes.find((n) => n.id === focusRequest.id);
+    if (!target) return;
+    const r = requestAnimationFrame(() =>
+      setCenter(target.position.x + NODE_WIDTH / 2, target.position.y + NODE_HEIGHT / 2, {
+        zoom: Math.max(getZoom(), 0.8),
+        duration: 400,
+      })
+    );
+    return () => cancelAnimationFrame(r);
+    // Only react to new focus requests, not layout changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest]);
+
+  return (
+    <div className="relative h-full w-full">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+        fitView
+        minZoom={0.2}
+        maxZoom={1.5}
+        proOptions={{ hideAttribution: true }}
+        onNodeClick={(_, n) => {
+          setActive(n.id);
+          requestFocus(n.id);
+          setMobileTab('chat');
+        }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={22} color="#D4C1F5" />
+        <MiniMap
+          pannable
+          zoomable
+          nodeColor={(n) => ((n.data as GraphItem).kind === 'side' ? '#D4C1F5' : '#FFB7D5')}
+        />
+        <Controls showInteractive={false} />
+      </ReactFlow>
+
+      {nodes.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <p className="font-heading font-semibold text-[var(--ink-light)] text-center px-6">
+            Your conversation tree will bloom here 🌱
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function GraphView() {
+  return (
+    <ReactFlowProvider>
+      <GraphInner />
+    </ReactFlowProvider>
+  );
+}

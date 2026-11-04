@@ -35,10 +35,13 @@ export function ChatPanel() {
   const addNode = useStore((s) => s.addNode);
   const updateNode = useStore((s) => s.updateNode);
   const setMascotState = useStore((s) => s.setMascotState);
+  const branchFromId = useStore((s) => s.branchFromId);
+  const setBranchFrom = useStore((s) => s.setBranchFrom);
+  const focusRequest = useStore((s) => s.focusRequest);
+  const requestFocus = useStore((s) => s.requestFocus);
 
   const [activeStreamCancel, setActiveStreamCancel] = useState<(() => void) | null>(null);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
-  const [branchingParent, setBranchingParent] = useState<TurnNode | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -83,6 +86,15 @@ export function ChatPanel() {
     setShowScrollBottom(isUp);
   };
 
+  const branchingParent = branchFromId ? nodes[branchFromId] ?? null : null;
+
+  // Respond to focus requests from the graph / breadcrumbs (scroll chat to that turn)
+  useEffect(() => {
+    if (!focusRequest) return;
+    const r = requestAnimationFrame(() => handleScrollToNode(focusRequest.id));
+    return () => cancelAnimationFrame(r);
+  }, [focusRequest, handleScrollToNode]);
+
   // Auto-scroll when streaming tokens arrive
   useEffect(() => {
     if (isStreaming) {
@@ -95,6 +107,7 @@ export function ChatPanel() {
     const isBranching = !!branchingParent;
     const parentId = isBranching ? branchingParent.id : leafId;
     const nodeId = nanoid();
+    const parentNode = parentId ? nodes[parentId] : undefined;
 
     // Context from ancestors
     const historyMessages = buildContext(nodes, parentId);
@@ -103,7 +116,7 @@ export function ChatPanel() {
     const newNode: TurnNode = {
       id: nodeId,
       parentId,
-      kind: isBranching ? 'side' : 'main',
+      kind: isBranching ? 'side' : (parentNode?.kind ?? 'main'),
       title: text.length > 28 ? `${text.slice(0, 28)}...` : text,
       user: text,
       assistant: '',
@@ -114,7 +127,7 @@ export function ChatPanel() {
       citations: [],
     };
 
-    setBranchingParent(null);
+    setBranchFrom(null);
     addNode(newNode);
     setMascotState(webSearchEnabled ? 'sniffing' : 'thinking');
     scrollToBottom();
@@ -233,7 +246,7 @@ export function ChatPanel() {
         <Breadcrumbs
           thread={thread}
           focusedNodeId={focusedNodeId}
-          onScrollToNode={handleScrollToNode}
+          onScrollToNode={requestFocus}
         />
       </div>
 
@@ -253,7 +266,7 @@ export function ChatPanel() {
               isFocused={focusedNodeId === node.id}
               onRetry={() => handleRetry(node)}
               onBranch={() => {
-                setBranchingParent(node);
+                setBranchFrom(node.id);
                 const el = document.getElementById(`turn-${node.id}`);
                 el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }}
@@ -315,11 +328,11 @@ export function ChatPanel() {
                 <GitFork className="w-3.5 h-3.5 text-[var(--ink)]" />
               </span>
               <span>
-                Branching side topic from: <strong>"{branchingParent.title}"</strong>
+                Branching side topic from: <strong>&ldquo;{branchingParent.title}&rdquo;</strong>
               </span>
             </div>
             <button
-              onClick={() => setBranchingParent(null)}
+              onClick={() => setBranchFrom(null)}
               className="p-1 hover:bg-white/80 rounded-full text-[var(--ink)] transition-colors"
               title="Cancel branching and continue main thread"
             >
@@ -481,7 +494,7 @@ function MessageTurn({
                   key={idx}
                   className="px-2 py-0.5 bg-white/95 rounded-md border border-[var(--ink)]/20 text-[11px] font-mono text-[var(--ink)]"
                 >
-                  "{q}"
+                  &ldquo;{q}&rdquo;
                 </span>
               ))}
             </div>

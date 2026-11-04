@@ -1,21 +1,28 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useStore } from '@/lib/store';
 import { MASCOTS } from '@/lib/constants';
 import type { MascotName } from '@/lib/types';
 import { DemoModeBanner } from './DemoModeBanner';
 import { ChatPanel } from './ChatPanel';
+import { GraphView } from './GraphView';
 import { MascotWidget } from './MascotWidget';
 import { Download, Upload, RotateCcw, Sparkles } from 'lucide-react';
 
 export function AppShell() {
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const demoMode = useStore((s) => s.demoMode);
   const currentMascot = useStore((s) => s.currentMascot);
   const setCurrentMascot = useStore((s) => s.setCurrentMascot);
+  const mobileTab = useStore((s) => s.mobileTab);
+  const setMobileTab = useStore((s) => s.setMobileTab);
   const loadDemo = useStore((s) => s.loadDemo);
   const reset = useStore((s) => s.reset);
   const exportJSON = useStore((s) => s.exportJSON);
@@ -23,8 +30,6 @@ export function AppShell() {
 
   // Check URL params for ?demo=1 and hydrate store
   useEffect(() => {
-    setHydrated(true);
-
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('demo') === '1' || params.get('demo') === 'true') {
@@ -94,7 +99,7 @@ export function AppShell() {
                 Sakura Chat
               </h1>
               <span className="text-[10px] font-heading font-extrabold px-1.5 py-0.5 rounded-full bg-[var(--mint)] border border-[var(--ink)] text-[var(--ink)]">
-                M1 Core
+                M2 Tree
               </span>
             </div>
             <p className="text-[11px] font-body text-[var(--ink-light)] font-semibold hidden sm:block">
@@ -187,11 +192,37 @@ export function AppShell() {
       {/* Demo Mode Notice Banner */}
       <DemoModeBanner />
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex overflow-hidden max-w-5xl w-full mx-auto my-2 md:my-4 md:px-4">
-        <div className="w-full h-full sticker bg-white overflow-hidden flex flex-col border-[var(--border-w)] border-[var(--ink)] shadow-[0_6px_0_var(--ink)]">
+      {/* Mobile tab switcher */}
+      <div className="md:hidden flex gap-2 px-2 pt-2 shrink-0">
+        {(['graph', 'chat'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setMobileTab(tab)}
+            className={`sticker-button flex-1 text-sm py-1.5 text-[var(--ink)] ${
+              mobileTab === tab ? 'bg-[var(--pink-main)]' : 'bg-white'
+            }`}
+          >
+            {tab === 'graph' ? '🌳 Graph' : '💬 Chat'}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Content Area: both panes stay mounted so streams survive tab switches */}
+      <main className="flex-1 min-h-0 flex gap-3 p-2 md:p-4">
+        <section
+          className={`sticker bg-white overflow-hidden relative min-h-0 md:flex-1 w-full md:w-auto ${
+            mobileTab === 'graph' ? 'block' : 'hidden md:block'
+          }`}
+        >
+          <GraphView />
+        </section>
+        <section
+          className={`sticker bg-white overflow-hidden min-h-0 flex-col w-full md:w-[min(46%,560px)] md:shrink-0 ${
+            mobileTab === 'chat' ? 'flex' : 'hidden md:flex'
+          }`}
+        >
           <ChatPanel />
-        </div>
+        </section>
       </main>
     </div>
   );

@@ -13,6 +13,13 @@ export const useStore = create<AppStore>()(
       currentMascot: 'mochi',
       mascotState: 'idle',
       webSearchEnabled: false,
+      branchFromId: null,
+      focusRequest: null,
+      mobileTab: 'chat',
+
+      setBranchFrom: (id: string | null) => set({ branchFromId: id }),
+      requestFocus: (id: string) => set({ focusRequest: { id, nonce: Date.now() } }),
+      setMobileTab: (mobileTab: 'graph' | 'chat') => set({ mobileTab }),
 
       addNode: (node: TurnNode) => {
         set((state) => ({
@@ -75,6 +82,8 @@ export const useStore = create<AppStore>()(
             nodes: allNodes,
             activeId: newActiveId,
             windows: newWindows,
+            branchFromId:
+              state.branchFromId && toDelete.has(state.branchFromId) ? null : state.branchFromId,
           };
         });
       },
@@ -109,7 +118,7 @@ export const useStore = create<AppStore>()(
           }
 
           // Enforce max 3 open floating windows by removing the lowest z-index window
-          let currentList = [...state.windows];
+          const currentList = [...state.windows];
           if (currentList.length >= 3) {
             currentList.sort((a, b) => a.z - b.z);
             currentList.shift();
@@ -180,6 +189,8 @@ export const useStore = create<AppStore>()(
             currentMascot: parsed.currentMascot || 'mochi',
             windows: [],
             demoMode: false,
+            branchFromId: null,
+            focusRequest: null,
           });
           return true;
         } catch {
@@ -194,6 +205,8 @@ export const useStore = create<AppStore>()(
           windows: [],
           demoMode: false,
           mascotState: 'idle',
+          branchFromId: null,
+          focusRequest: null,
         });
       },
 
@@ -204,6 +217,8 @@ export const useStore = create<AppStore>()(
           windows: [],
           demoMode: true,
           mascotState: 'success',
+          branchFromId: null,
+          focusRequest: null,
         });
       },
 

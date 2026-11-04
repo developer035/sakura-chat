@@ -56,6 +56,14 @@ export interface AppStore {
   currentMascot: MascotName;
   mascotState: MascotState;
   webSearchEnabled: boolean;
+  branchFromId: string | null;
+  focusRequest: { id: string; nonce: number } | null;
+  mobileTab: 'graph' | 'chat';
+
+  // UI actions
+  setBranchFrom: (id: string | null) => void;
+  requestFocus: (id: string) => void;
+  setMobileTab: (tab: 'graph' | 'chat') => void;
 
   // Node actions
   addNode: (node: TurnNode) => void;
