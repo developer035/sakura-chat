@@ -1,26 +1,117 @@
 @import "tailwindcss";
+@import "../styles/mascot.css";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-cream: #FFF8F0;
+  --pink-main: #FFB7D5;
+  --pink-deep: #FF7EB6;
+  --lavender: #D4C1F5;
+  --sky: #BFE3FF;
+  --mint: #C6F1DC;
+  --butter: #FFF1A8;
+  --ink: #5B4B6B;
+  --ink-light: #8B7A9B;
+  
+  --radius: 20px;
+  --border-w: 2.5px;
+  --shadow-offset: 0 4px 0 var(--ink);
+  --shadow-offset-hover: 0 6px 0 var(--ink);
+  --shadow-offset-active: 0 1px 0 var(--ink);
+
+  --font-heading: 'Fredoka', cursive, sans-serif;
+  --font-body: 'Nunito', sans-serif;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-cream: var(--bg-cream);
+  --color-pink-main: var(--pink-main);
+  --color-pink-deep: var(--pink-deep);
+  --color-lavender: var(--lavender);
+  --color-sky: var(--sky);
+  --color-mint: var(--mint);
+  --color-butter: var(--butter);
+  --color-ink: var(--ink);
+  --color-ink-light: var(--ink-light);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-cream);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: var(--font-heading);
+}
+
+/* Sticker aesthetic styling */
+.sticker {
+  border: var(--border-w) solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-offset);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  background-color: #FFFFFF;
+}
+
+.sticker:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-offset-hover);
+}
+
+.sticker:active {
+  transform: translateY(3px);
+  box-shadow: var(--shadow-offset-active);
+}
+
+.sticker-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 9999px;
+  box-shadow: 0 3px 0 var(--ink);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sticker-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.sticker-button:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+/* Dotted background pattern */
+.bg-sakura-dots {
+  background-image: radial-gradient(#FFB7D5 1.5px, transparent 1.5px), radial-gradient(#D4C1F5 1.5px, #FFF8F0 1.5px);
+  background-size: 40px 40px;
+  background-position: 0 0, 20px 20px;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(91, 75, 107, 0.05);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--pink-main);
+  border: 1.5px solid var(--ink);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pink-deep);
 }
