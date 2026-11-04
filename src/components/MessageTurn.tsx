@@ -38,7 +38,7 @@ export function EmptyChatState({ onSelectPrompt }: { onSelectPrompt: (p: string)
   ];
 
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-12 px-4 space-y-6">
+    <div className="min-h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto py-12 px-4 space-y-6">
       <MascotWidget size="xl" state="sleeping" showSpeechBubble speechText="Psst… wake me with a question! 💤" />
 
       <div>

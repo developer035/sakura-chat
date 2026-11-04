@@ -462,9 +462,11 @@ export const useStore = create<AppStore>()(
         const demo: Record<string, TurnNode> = {};
         for (const [id, n] of Object.entries(DEMO_NODES)) demo[id] = { ...n, conversationId: convId };
         const times = Object.values(demo).map((n) => n.createdAt);
-        set({
-          nodes: demo,
+        // Added next to the user's own chats (re-loading just refreshes the demo chat).
+        set((state) => ({
+          nodes: { ...state.nodes, ...demo },
           conversations: {
+            ...state.conversations,
             [convId]: {
               id: convId,
               title: 'Kyoto Cat Sanctuary (demo)',
@@ -479,7 +481,7 @@ export const useStore = create<AppStore>()(
           mascotState: 'success',
           focusRequest: null,
           inspectorTarget: null,
-        });
+        }));
       },
 
       setDemoMode: (enabled: boolean) => {

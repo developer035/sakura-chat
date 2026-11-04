@@ -61,7 +61,6 @@ export function AppShell() {
   const importJSON = useStore((s) => s.importJSON);
   const pushToast = useStore((s) => s.pushToast);
   const askConfirm = useStore((s) => s.askConfirm);
-  const hasNodes = useStore((s) => Object.keys(s.nodes).length > 0);
 
   // Track the available width so the chat panel can be clamped as the window changes.
   useEffect(() => {
@@ -153,18 +152,8 @@ export function AppShell() {
     });
   };
 
-  const handleLoadDemo = () => {
-    if (hasNodes && !demoMode) {
-      askConfirm({
-        title: 'Replace your tree with the demo?',
-        message: 'Your current conversation will be replaced. Export it first if you want to keep it.',
-        confirmLabel: 'Load demo',
-        onConfirm: loadDemo,
-      });
-      return;
-    }
-    loadDemo();
-  };
+  // The demo is added as its own chat; your other chats are left alone.
+  const handleLoadDemo = () => loadDemo();
 
   // Export JSON file download
   const handleExport = async () => {
@@ -234,16 +223,16 @@ export function AppShell() {
       <header className="border-b-2 border-[var(--ink)] bg-white/95 backdrop-blur px-4 py-2.5 flex items-center justify-between shrink-0 z-30">
         {/* Logo and Brand */}
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => setMobileSidebar(true)}
-            className="md:hidden p-1.5 sticker-button bg-white text-[var(--ink)]"
-            title="Chats"
-          >
-            <Menu className="w-4 h-4" />
-          </button>
-          <div className="hidden sm:flex w-10 h-10 rounded-2xl bg-[var(--pink-main)] border-2 border-[var(--ink)] items-center justify-center shadow-[0_2px_0_var(--ink)] shrink-0">
-            <span className="text-xl">🌸</span>
+          {/* Wrapper hides it on desktop: .sticker-button sets its own display, which beats md:hidden */}
+          <div className="md:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileSidebar(true)}
+              className="p-1.5 sticker-button bg-white text-[var(--ink)]"
+              title="Chats"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
           </div>
           {/* Live mascot: follows the global mascot state (thinking, writing, success...) */}
           <MascotWidget size="sm" />
