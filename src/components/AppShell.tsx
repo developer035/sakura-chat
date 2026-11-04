@@ -13,6 +13,7 @@ import { ContextInspector } from './ContextInspector';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MascotWidget } from './MascotWidget';
 import { setFileStoreFallbackHandler } from '@/lib/file-store';
+import { cleanupFiles, embedFiles, restoreFiles } from '@/lib/bundle';
 import { Download, Ellipsis, Upload, RotateCcw, Sparkles } from 'lucide-react';
 
 export function AppShell() {
@@ -47,6 +48,11 @@ export function AppShell() {
         message: '🍵 This browser blocks file storage, so attachments will be lost on refresh.',
       })
     );
+  }, []);
+
+  // Drop stored files that no turn refers to any more (older than 10 minutes only).
+  useEffect(() => {
+    void cleanupFiles(useStore.getState().nodes).catch(() => {});
   }, []);
 
   // Check URL params for ?demo=1 and hydrate store
@@ -104,8 +110,18 @@ export function AppShell() {
   };
 
   // Export JSON file download
-  const handleExport = () => {
-    const jsonStr = exportJSON();
+  const handleExport = async () => {
+    let jsonStr = exportJSON();
+    try {
+      // v2 bundle: embed uploaded and generated files so the backup is complete.
+      const { json, missing } = await embedFiles(jsonStr, useStore.getState().nodes);
+      jsonStr = json;
+      if (missing > 0) {
+        pushToast({ message: `🍵 ${missing} file${missing === 1 ? ' was' : 's were'} no longer stored and could not be included` });
+      }
+    } catch (err) {
+      console.error('Export bundle failed:', err);
+    }
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -123,9 +139,15 @@ export function AppShell() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const content = event.target?.result as string;
       if (content) {
+        // v2 exports carry their files: put them back in IndexedDB before the turns appear.
+        try {
+          await restoreFiles(JSON.parse(content));
+        } catch {
+          /* not JSON: importJSON reports it */
+        }
         const { ok, count } = importJSON(content);
         pushToast({
           message: ok

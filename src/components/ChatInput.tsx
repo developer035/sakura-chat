@@ -7,6 +7,7 @@ import { MASCOTS } from '@/lib/constants';
 import { ACCEPT_ATTR, IngestError, MAX_FILES_PER_MESSAGE, ingestFile } from '@/lib/attachments';
 import { del } from '@/lib/file-store';
 import { MAX_MESSAGE_DOC_CHARS } from '@/lib/documents';
+import { isSlashPrefix, parseSlash, suggestTool } from '@/lib/commands';
 import type { Attachment, ImageSize, ToolMode } from '@/lib/types';
 
 interface ChatInputProps {
@@ -41,6 +42,7 @@ export function ChatInput({
   const [size, setSize] = useState<ImageSize>('1024x1024');
   const [useRef_, setUseRef] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [dismissedHint, setDismissedHint] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -56,12 +58,18 @@ export function ChatInput({
     }
   }, [disabled]);
 
+  // `/image ...` and `/doc ...` act like picking the tool from the Create menu.
+  const slash = parseSlash(input);
+  const activeTool: ToolMode | null = slash?.tool ?? tool;
+  const hint = !activeTool && !dismissedHint ? suggestTool(input) : null;
   const reading = pending.some((p) => !p.att && !p.failed);
   const ready = pending.filter((p) => p.att).map((p) => p.att as Attachment);
   const canSend =
-    !disabled && !reading && (tool ? input.trim().length > 0 : input.trim().length > 0 || ready.length > 0);
+    !disabled &&
+    !reading &&
+    (activeTool ? input.trim().length > 0 : input.trim().length > 0 || ready.length > 0);
   const editingPrev =
-    tool === 'image' && !!suggestedRef && useRef_ && !ready.some((a) => a.kind === 'image');
+    activeTool === 'image' && !!suggestedRef && useRef_ && !ready.some((a) => a.kind === 'image');
 
   const addFiles = (files: File[]) => {
     if (!files.length) return;
@@ -111,11 +119,13 @@ export function ChatInput({
       pushToast({ message: '🍵 That is a lot of document text for one message. Remove a file and try again.' });
       return;
     }
+    const body = slash ? slash.text : input.trim();
     const text =
-      input.trim() ||
+      body ||
       (ready.some((a) => a.kind !== 'image') ? 'Summarize this document.' : 'Describe this image.');
     const atts = editingPrev && suggestedRef ? [...ready, suggestedRef] : ready;
-    onSend(text, atts.length ? atts : undefined, tool ?? undefined, tool === 'image' ? size : undefined);
+    onSend(text, atts.length ? atts : undefined, activeTool ?? undefined, activeTool === 'image' ? size : undefined);
+    setDismissedHint(false);
     setInput('');
     setPending([]);
     setTool(null);
@@ -186,8 +196,59 @@ export function ChatInput({
         </div>
       )}
 
+      {/* Slash command picker while typing "/" */}
+      {isSlashPrefix(input) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-[var(--ink)] bg-white px-2.5 py-1.5 text-xs font-heading font-semibold text-[var(--ink)]">
+          <span className="opacity-70">Commands:</span>
+          <button
+            type="button"
+            onClick={() => {
+              setInput('/image ');
+              textareaRef.current?.focus();
+            }}
+            className="rounded-full border border-[var(--ink)] bg-[var(--lavender)]/60 px-2 py-0.5 hover:bg-[var(--lavender)]"
+          >
+            /image <span className="font-normal opacity-70">draw something</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setInput('/doc ');
+              textareaRef.current?.focus();
+            }}
+            className="rounded-full border border-[var(--ink)] bg-[var(--lavender)]/60 px-2 py-0.5 hover:bg-[var(--lavender)]"
+          >
+            /doc <span className="font-normal opacity-70">write a document</span>
+          </button>
+        </div>
+      )}
+
+      {/* Suggestion: offered, never applied automatically */}
+      {hint && (
+        <div className="flex items-center gap-2 rounded-xl border border-[var(--ink)]/40 bg-[var(--butter)]/70 px-2.5 py-1 text-xs font-heading font-semibold text-[var(--ink)]">
+          <button
+            type="button"
+            onClick={() => {
+              setTool(hint);
+              textareaRef.current?.focus();
+            }}
+            className="underline decoration-dotted hover:decoration-solid"
+          >
+            {hint === 'image' ? '🖼️ Make this an image?' : '📄 Make this a document?'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDismissedHint(true)}
+            className="ml-auto p-0.5 rounded-full hover:bg-white/70"
+            title="Dismiss"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
       {/* Active tool chip */}
-      {tool === 'image' && (
+      {activeTool === 'image' && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-[var(--ink)] bg-[var(--lavender)]/60 px-2.5 py-1.5 text-xs font-heading font-semibold text-[var(--ink)]">
           <span>🖼️ Image mode: describe the picture you want</span>
           <span className="inline-flex rounded-full border border-[var(--ink)] bg-white overflow-hidden">
@@ -222,7 +283,10 @@ export function ChatInput({
           )}
           <button
             type="button"
-            onClick={() => setTool(null)}
+            onClick={() => {
+              setTool(null);
+              if (slash) setInput(slash.text);
+            }}
             className="ml-auto p-0.5 rounded-full hover:bg-white/70"
             title="Leave Image mode"
           >
@@ -231,12 +295,15 @@ export function ChatInput({
         </div>
       )}
 
-      {tool === 'document' && (
+      {activeTool === 'document' && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-[var(--ink)] bg-[var(--lavender)]/60 px-2.5 py-1.5 text-xs font-heading font-semibold text-[var(--ink)]">
           <span>📄 Document mode: I will write a full document you can download as PDF, Word or Markdown</span>
           <button
             type="button"
-            onClick={() => setTool(null)}
+            onClick={() => {
+              setTool(null);
+              if (slash) setInput(slash.text);
+            }}
             className="ml-auto p-0.5 rounded-full hover:bg-white/70"
             title="Leave Document mode"
           >
@@ -319,9 +386,9 @@ export function ChatInput({
           disabled={disabled || isStreaming}
           rows={1}
           placeholder={
-            tool === 'image'
+            activeTool === 'image'
               ? 'Describe the image you want… 🎨 (Enter to create)'
-              : tool === 'document'
+              : activeTool === 'document'
               ? 'Describe the document you want… 📄 (Enter to write it)'
               : webSearchEnabled
               ? `Ask ${mascotInfo.name} with live web search... 🌐 (Enter to send)`
