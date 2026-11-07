@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fredoka, Nunito } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const fredoka = Fredoka({
@@ -28,6 +29,7 @@ export default function RootLayout({
     <html lang="en" className={`${fredoka.variable} ${nunito.variable} h-full`}>
       <body className="min-h-full flex flex-col font-body bg-[var(--bg-cream)] text-[var(--ink)] antialiased selection:bg-[var(--pink-main)] selection:text-[var(--ink)]">
         {children}
+        <Analytics />
       </body>
     </html>
   );
